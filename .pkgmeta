@@ -1,0 +1,7 @@
+package-as: MathWro's QOL
+
+ignore:
+  - .pkgmeta
+  - .github
+  - CLAUDE.md
+  - docs
