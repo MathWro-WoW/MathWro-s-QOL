@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Critical: TOC Filename
 
-The `.toc` file name must exactly match the addon folder name: `MathWro QOL.toc` inside `MathWro QOL/`. Mismatch = addon invisible in game. Any hardcoded addon name strings in Lua (e.g. `ADDON_LOADED` checks) must also use `"MathWro QOL"`.
+The `.toc` file name must exactly match the addon folder name: `MathWro QOL_Mainline.toc` inside `MathWro QOL/`. Mismatch = addon invisible in game. Any hardcoded addon name strings in Lua (e.g. `ADDON_LOADED` checks) must also use `"MathWro QOL"`.
 
 ## Testing
 
@@ -23,7 +23,7 @@ Target: `120000, 120001` (Midnight, patch 12.x). Both values are required in the
 
 ## Architecture
 
-**Load order** is defined in `MathWro QOL.toc`:
+**Load order** is defined in `MathWro QOL_Mainline.toc`:
 1. `Core.lua` — initialises `MathWroQOLDB` (SavedVariables), applies defaults, exposes `addon:RegisterFeature()` and `addon:NotifyFeature()`
 2. `Config.lua` — builds and registers the Blizzard options panel (three panels: parent, General, ElvUI Plugins)
 3. `Features/*.lua` — each feature self-registers by calling `addon:RegisterFeature(featureTable)` at file load time
@@ -42,7 +42,7 @@ Target: `120000, 120001` (Midnight, patch 12.x). Both values are required in the
 ## Adding a New Feature
 
 1. Create `Features/MyFeature.lua` with the feature contract above
-2. Add `Features\MyFeature.lua` to `MathWro QOL.toc` after existing feature lines
+2. Add `Features\MyFeature.lua` to `MathWro QOL_Mainline.toc` after existing feature lines
 3. Add default DB values to the `defaults` table in `Core.lua`
 4. Add a UI section to the appropriate sub-panel in `Config.lua` (`BuildGeneralPanel` or `BuildElvUIPanel`)
 
