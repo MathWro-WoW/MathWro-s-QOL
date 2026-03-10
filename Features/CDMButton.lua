@@ -12,41 +12,36 @@ local function openCDM()
     end
 end
 
--- Re-anchor GameMenuButtonAddOns below `anchorFrame` and resize the menu.
--- Called every OnShow because Blizzard rebuilds button layout on each open.
-local function repositionButtons(anchorFrame)
+-- Called via hooksecurefunc on GameMenuFrame.Layout.
+-- Blizzard re-pools and re-positions all buttons in Layout(), so this hook
+-- runs after the layout is fully settled — the correct place to insert extras.
+local function positionCDMButton()
     if not btn or not btn:IsShown() then return end
-    if not anchorFrame then return end
 
-    -- One button height + standard spacing used by the game menu template
-    local BUTTON_HEIGHT = 24
-    local SPACING = 1
+    local anchorBtn
+    if GameMenuFrame.ElvUI then
+        -- ElvUI is loaded: group CDM directly below the ElvUI button.
+        anchorBtn = GameMenuFrame.ElvUI
+    elseif GameMenuFrame.buttonPool then
+        -- No ElvUI: find the Shop (BLIZZARD_STORE) button from the active pool.
+        local storeText = _G.BLIZZARD_STORE
+        if storeText then
+            for button in GameMenuFrame.buttonPool:EnumerateActive() do
+                if button:GetText() == storeText then
+                    anchorBtn = button
+                    break
+                end
+            end
+        end
+    end
 
-    -- Anchor CDM button below anchorFrame
+    if not anchorBtn then return end
+
     btn:ClearAllPoints()
-    btn:SetPoint("TOP", anchorFrame, "BOTTOM", 0, -SPACING)
+    btn:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -10)
 
-    -- Shift AddOns (and everything below it) down by inserting our button
-    if GameMenuButtonAddOns then
-        GameMenuButtonAddOns:ClearAllPoints()
-        GameMenuButtonAddOns:SetPoint("TOP", btn, "BOTTOM", 0, -SPACING)
-    end
-
-    -- Expand the frame to fit the extra button.
-    -- Safe to add each OnShow because Blizzard's GameMenuFrame_ShowMenu
-    -- resets the frame height before OnShow fires.
-    local extraHeight = BUTTON_HEIGHT + SPACING
-    GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + extraHeight)
-end
-
-local function getAnchorFrame()
-    -- If ElvUI's game menu button exists and is shown, group below it.
-    -- ElvUI names its button "ElvUIGameMenuButton".
-    if ElvUI and _G["ElvUIGameMenuButton"] and _G["ElvUIGameMenuButton"]:IsShown() then
-        return _G["ElvUIGameMenuButton"]
-    end
-    -- Otherwise anchor directly below Shop.
-    return GameMenuButtonShop
+    -- Expand frame to fit the extra button (35px height + 10px gap, matching ElvUI spacing).
+    GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + 45)
 end
 
 function CDMButton:Apply()
@@ -56,33 +51,29 @@ function CDMButton:Apply()
         btn:Show()
     else
         btn:Hide()
-        -- If hidden, restore AddOns to its default anchor (below Shop or ElvUI btn)
-        -- Blizzard will reset layout on next OnShow anyway, so nothing extra needed.
     end
 end
 
 function CDMButton:Initialize()
     local db = addon.db.cdmButton
 
-    -- Create button once
-    btn = CreateFrame("Button", "MathWroQOL_CDMButton", GameMenuFrame, "GameMenuButtonTemplate")
+    -- Use the same template and size as ElvUI's retail game menu button.
+    btn = CreateFrame("Button", "MathWroQOL_CDMButton", GameMenuFrame, "MainMenuFrameButtonTemplate")
+    btn:SetSize(200, 35)
     btn:SetText("CDM")
     btn:SetScript("OnClick", function()
         HideUIPanel(GameMenuFrame)
         openCDM()
     end)
 
-    -- Hook OnShow to reposition every time the menu opens
+    -- Hook Layout (not OnShow): Blizzard calls Layout() to position all pooled
+    -- buttons, so hooking here ensures our SetPoint runs after theirs.
     if not GameMenuFrame._mqolCDMHooked then
-        GameMenuFrame:HookScript("OnShow", function()
-            if addon.db.cdmButton and addon.db.cdmButton.enabled then
-                repositionButtons(getAnchorFrame())
-            end
-        end)
+        hooksecurefunc(GameMenuFrame, "Layout", positionCDMButton)
         GameMenuFrame._mqolCDMHooked = true
     end
 
-    -- Register slash commands (cannot be unregistered; toggled by db flag at fire time)
+    -- Register slash commands; toggled by db flag at invocation time.
     SLASH_MQOLWA1 = "/wa"
     SlashCmdList["MQOLWA"] = function()
         if addon.db.cdmButton and addon.db.cdmButton.slashWA then
