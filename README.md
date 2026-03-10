@@ -20,25 +20,6 @@ Adds a "CDM" button to the Escape menu that directly opens the Cooldown Manager 
 **Vehicle Bar Visibility**
 Keep selected action bars (1–10) visible during vehicle combat and override bar states (e.g. shapeshift-style encounters). Prevents ElvUI's mouseover fade from hiding bars for the duration of the encounter, and restores normal fade behaviour on exit. By default only bar 1 is enabled — enable additional bars in the options panel.
 
-## Installation
-
-1. Download or clone this repository into your addons folder:
-   ```
-   World of Warcraft/_retail_/Interface/AddOns/MathWro QOL/
-   ```
-2. Launch WoW and enable **MathWro QOL** at the character select screen.
-
-## Configuration
-
-Open **Interface → AddOns → MathWro QOL** in-game. Settings are split across two pages:
-- **General** — Game Menu options
-- **ElvUI Plugins** — ElvUI-dependent options (greyed out if ElvUI is not loaded)
-
-## Compatibility
-
-- WoW retail 12.x (Midnight)
-- ElvUI features require ElvUI to be installed and enabled
-
 ---
 
-*This addon was developed with the assistance of [Claude Code](https://claude.ai/code) (Anthropic AI).*
+*This addon was developed with the assistance of AI.*
