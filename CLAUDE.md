@@ -37,7 +37,9 @@ Target: `120001` (Midnight, patch 12.0.1). Use a single value — the BigWigs pa
 
 **Settings storage**: `addon.db` is a direct reference to `MathWroQOLDB`. Each feature owns a sub-table keyed by its name (e.g. `addon.db.gameMenu`, `addon.db.vehicleBar`). Defaults for new keys are applied by `applyDefaults()` in `Core.lua` — add new feature defaults to the `defaults` table there.
 
-**Options panel** uses `Settings.RegisterCanvasLayoutCategory` / `Settings.RegisterCanvasLayoutSubcategory` (TWW API). The parent category has no interactive controls. Sub-panels are "General" (non-ElvUI features) and "ElvUI Plugins" (ElvUI-dependent features).
+**Options panel** uses `Settings.RegisterCanvasLayoutCategory` / `Settings.RegisterCanvasLayoutSubcategory` (TWW API). The parent category has no interactive controls. Sub-panels are "General" (non-ElvUI features) and "ElvUI Plugins" (ElvUI-dependent features). `/mqol` opens the panel via `Settings.OpenToCategory(parentCat:GetID())` (fallback: `InterfaceOptionsFrame_OpenToCategory`).
+
+**Config.lua layout conventions**: sections are separated by `MakeSeparator` (1px `CreateTexture` line, 550px wide). Checkboxes use `MakeCheckbox` with `ClearAllPoints()` + relative `SetPoint` for correct stacking. FontStrings that may wrap must have `SetWidth()` and `SetJustifyH("LEFT")` set explicitly.
 
 ## Adding a New Feature
 
@@ -51,6 +53,7 @@ Target: `120001` (Midnight, patch 12.0.1). Use a single value — the BigWigs pa
 - `RegisterStateDriver(frame, "visibility", condition)` — last call wins; used by VehicleBar to override ElvUI's hide-on-vehicle condition
 - `hooksecurefunc("FunctionName", hook)` — post-hook only; use an `applying` flag guard when the hook itself calls the same function to prevent recursion
 - `GameMenuFrame` — re-anchored to `CENTER, UIParent, CENTER` by Blizzard on every `OnShow`; position persistence requires an `OnShow` hook to re-apply saved coordinates
+- `AUCTION_HOUSE_DEFAULT_FILTERS` — global table keyed by `Enum.AuctionHouseFilter.*` integers; the AH reads this on open to initialise filter state. Set entries here to pre-enable filters. Only exists after `Blizzard_AuctionHouseUI` loads (LoD addon). Correct event is `AUCTION_HOUSE_SHOW` (not `AUCTION_HOUSE_OPENED` which does not exist). Register the event frame at top level (not inside `Initialize()`) to ensure it is in place before `Blizzard_AuctionHouseUI` loads.
 
 ## GameMenuFrame Button Insertion (Retail)
 

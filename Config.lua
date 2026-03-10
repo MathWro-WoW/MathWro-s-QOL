@@ -293,10 +293,20 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, generalPanel, generalPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel,   elvuiPanel.name)
         Settings.RegisterAddOnCategory(parentCat)
+
+        SLASH_MQOL1 = "/mqol"
+        SlashCmdList["MQOL"] = function()
+            Settings.OpenToCategory(parentCat:GetID())
+        end
     else
         -- Fallback for older API
         InterfaceOptions_AddCategory(parentPanel)
         InterfaceOptions_AddCategory(generalPanel, parentPanel)
         InterfaceOptions_AddCategory(elvuiPanel,   parentPanel)
+
+        SLASH_MQOL1 = "/mqol"
+        SlashCmdList["MQOL"] = function()
+            InterfaceOptionsFrame_OpenToCategory(parentPanel)
+        end
     end
 end)
