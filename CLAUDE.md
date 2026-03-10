@@ -51,3 +51,23 @@ Target: `120001` (Midnight, patch 12.0.1). Use a single value — the BigWigs pa
 - `RegisterStateDriver(frame, "visibility", condition)` — last call wins; used by VehicleBar to override ElvUI's hide-on-vehicle condition
 - `hooksecurefunc("FunctionName", hook)` — post-hook only; use an `applying` flag guard when the hook itself calls the same function to prevent recursion
 - `GameMenuFrame` — re-anchored to `CENTER, UIParent, CENTER` by Blizzard on every `OnShow`; position persistence requires an `OnShow` hook to re-apply saved coordinates
+
+## GameMenuFrame Button Insertion (Retail)
+
+Retail uses a `buttonPool` system — named globals like `GameMenuButtonShop` do not exist. Key patterns:
+- Use `MainMenuFrameButtonTemplate` (200×35) not `GameMenuButtonTemplate`
+- Hook `hooksecurefunc(GameMenuFrame, "Layout", fn)` — NOT `OnShow`. `Layout()` runs after button pooling; `OnShow` is too early
+- Find pool buttons by iterating `GameMenuFrame.buttonPool:EnumerateActive()` and matching `button:GetText()` against globals like `_G.BLIZZARD_STORE`
+- ElvUI stores its game menu button as `GameMenuFrame.ElvUI` (not a named global)
+- To nudge pool buttons below insertion point: compare `button:GetTop()` against `anchorBtn:GetBottom()`, then `button:SetPoint(point, relativeTo, relativePoint, x, y - offset)`
+- Apply ElvUI skin via `hooksecurefunc(GameMenuFrame, "InitButtons", fn)` → `E:GetModule("Skins"):HandleButton(btn, nil, nil, nil, true)`
+
+## ElvUI Action Bar Fade System
+
+Two parallel fade systems exist — individual and global:
+- **Individual mouseover** (`bar.mouseover = true`): fades via `E:UIFrameFadeOut(bar, ...)` on `Bar_OnLeave`. NOT affected by ElvUI's `mouseLock`
+- **Global fade parent** (`bar.inheritGlobalFade = true`): parented to `AB.fadeParent`; respects `mouseLock` which ElvUI sets true for vehicle/override/combat states
+- `AB:PLAYER_ENTERING_WORLD` does NOT call `UpdateButtonSettings` — state drivers are only re-registered during `AB:Initialize()` and explicit `Apply()` calls
+- Bar 1 default visibility in Retail: `[petbattle] hide; show` (no vehicleui/overridebar). Bars 2–10: `[vehicleui][petbattle][overridebar] hide; show`
+- Vehicle-like state detection: `HasOverrideActionBar() or HasVehicleActionBar() or IsPossessBarVisible() or UnitExists("vehicle")`. Override-bar shapeshifts trigger `HasOverrideActionBar()` but NOT `UNIT_ENTERED_VEHICLE`
+- Relevant events: `UPDATE_OVERRIDE_ACTIONBAR`, `VEHICLE_UPDATE`, `UNIT_ENTERED_VEHICLE` / `UNIT_EXITED_VEHICLE`
