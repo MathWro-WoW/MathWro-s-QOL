@@ -40,6 +40,22 @@ local function positionCDMButton()
     btn:ClearAllPoints()
     btn:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -10)
 
+    -- Nudge all pool buttons that sit at or below the anchor's bottom edge down
+    -- to make room for CDM. Layout() resets their positions each open, so this
+    -- runs fresh every time and doesn't accumulate.
+    local anchorBottom = anchorBtn:GetBottom()
+    if anchorBottom and GameMenuFrame.buttonPool then
+        for button in GameMenuFrame.buttonPool:EnumerateActive() do
+            local top = button:GetTop()
+            if top and top <= anchorBottom + 1 then
+                local point, relativeTo, relativePoint, x, y = button:GetPoint()
+                if point then
+                    button:SetPoint(point, relativeTo, relativePoint, x, y - 45)
+                end
+            end
+        end
+    end
+
     -- Expand frame to fit the extra button (35px height + 10px gap, matching ElvUI spacing).
     GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + 45)
 end
@@ -71,6 +87,24 @@ function CDMButton:Initialize()
     if not GameMenuFrame._mqolCDMHooked then
         hooksecurefunc(GameMenuFrame, "Layout", positionCDMButton)
         GameMenuFrame._mqolCDMHooked = true
+    end
+
+    -- Apply ElvUI skin when ElvUI is active, mirroring ElvUI's own GameMenuInitButtons hook.
+    if ElvUI and not GameMenuFrame._mqolCDMSkinHooked then
+        hooksecurefunc(GameMenuFrame, "InitButtons", function()
+            if btn and not btn.IsSkinned then
+                local E = ElvUI[1]
+                local S = E and E:GetModule("Skins")
+                if S and S.HandleButton then
+                    S:HandleButton(btn, nil, nil, nil, true)
+                    if btn.backdrop then
+                        btn.backdrop:SetInside(nil, 1, 1)
+                    end
+                    btn.IsSkinned = true
+                end
+            end
+        end)
+        GameMenuFrame._mqolCDMSkinHooked = true
     end
 
     -- Register slash commands; toggled by db flag at invocation time.
