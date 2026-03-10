@@ -2,6 +2,15 @@ local _, addon = ...
 
 -- ── Widget helpers ────────────────────────────────────────────────────────────
 
+local function MakeSeparator(parent, anchor, offsetY)
+    local line = parent:CreateTexture(nil, "ARTWORK")
+    line:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+    line:SetHeight(1)
+    line:SetWidth(550)
+    line:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, offsetY)
+    return line
+end
+
 local function MakeCheckbox(parent, label, x, y, getValue, setValue)
     local cb = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
     cb:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
@@ -99,8 +108,10 @@ local function BuildGeneralPanel()
 
     -- ── CDM Button ────────────────────────────────────────────────────────────
 
+    local cdmSep = MakeSeparator(panel, resetBtn, -12)
+
     local cdmLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    cdmLabel:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 0, -24)
+    cdmLabel:SetPoint("TOPLEFT", cdmSep, "BOTTOMLEFT", 0, -10)
     cdmLabel:SetText("CDM Button")
 
     local cdmDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -136,6 +147,40 @@ local function BuildGeneralPanel()
         end
     )
 
+    -- ── Auction House Filters ─────────────────────────────────────────────────
+
+    local ahSep = MakeSeparator(panel, cmCB, -12)
+
+    local ahLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    ahLabel:SetPoint("TOPLEFT", ahSep, "BOTTOMLEFT", 0, -10)
+    ahLabel:SetText("Auction House Filters")
+
+    local ahDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    ahDesc:SetPoint("TOPLEFT", ahLabel, "BOTTOMLEFT", 0, -4)
+    ahDesc:SetText("Automatically enable selected filters each time you open the Auction House.")
+
+    local ahExpCB = MakeCheckbox(panel, "Auto-enable 'Current expansion only' filter", 16, 0,
+        function() return addon.db.auctionFilter and addon.db.auctionFilter.currentExpansionOnly end,
+        function(val)
+            if not addon.db.auctionFilter then addon.db.auctionFilter = {} end
+            addon.db.auctionFilter.currentExpansionOnly = val
+            addon:NotifyFeature("auctionFilter")
+        end
+    )
+    ahExpCB:ClearAllPoints()
+    ahExpCB:SetPoint("TOPLEFT", ahDesc, "BOTTOMLEFT", 0, -8)
+
+    local ahUsableCB = MakeCheckbox(panel, "Auto-enable 'Usable only' filter", 16, 0,
+        function() return addon.db.auctionFilter and addon.db.auctionFilter.usableOnly end,
+        function(val)
+            if not addon.db.auctionFilter then addon.db.auctionFilter = {} end
+            addon.db.auctionFilter.usableOnly = val
+            addon:NotifyFeature("auctionFilter")
+        end
+    )
+    ahUsableCB:ClearAllPoints()
+    ahUsableCB:SetPoint("TOPLEFT", ahExpCB, "BOTTOMLEFT", 0, -4)
+
     return panel
 end
 
@@ -160,17 +205,21 @@ local function BuildElvUIPanel()
 
     -- ── Vehicle Bar Visibility ────────────────────────────────────────────────
 
+    local vbSep = MakeSeparator(panel, title, -32)
+
     local sectionLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    sectionLabel:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -44)
+    sectionLabel:SetPoint("TOPLEFT", vbSep, "BOTTOMLEFT", 0, -10)
     sectionLabel:SetText("Vehicle Bar Visibility")
 
     local sectionDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     sectionDesc:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -4)
+    sectionDesc:SetWidth(500)
+    sectionDesc:SetJustifyH("LEFT")
     sectionDesc:SetText("Keep selected action bars visible while in vehicle combat, including override bar states. Prevents mouseover fade from hiding bars during these encounters.")
 
     local widgets = {}
 
-    local enabledCB = MakeCheckbox(panel, "Enable", 16, -110,
+    local enabledCB = MakeCheckbox(panel, "Enable", 0, 0,
         function() return addon.db.vehicleBar and addon.db.vehicleBar.enabled end,
         function(val)
             if addon.db.vehicleBar then
@@ -179,16 +228,18 @@ local function BuildElvUIPanel()
             end
         end
     )
+    enabledCB:ClearAllPoints()
+    enabledCB:SetPoint("TOPLEFT", sectionDesc, "BOTTOMLEFT", 0, -12)
     widgets[#widgets + 1] = enabledCB
 
     local barsLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    barsLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -140)
+    barsLabel:SetPoint("TOPLEFT", enabledCB, "BOTTOMLEFT", 0, -8)
     barsLabel:SetText("Bars to keep visible:")
 
+    local barRefs = {}
     for i = 1, 10 do
         local col = (i - 1) % 5
-        local row = math.floor((i - 1) / 5)
-        local cb = MakeCheckbox(panel, "Bar "..i, 16 + col * 90, -160 - row * 26,
+        local cb = MakeCheckbox(panel, "Bar "..i, 0, 0,
             function()
                 return addon.db.vehicleBar and addon.db.vehicleBar.bars[i] == true
             end,
@@ -199,6 +250,17 @@ local function BuildElvUIPanel()
                 end
             end
         )
+        cb:ClearAllPoints()
+        if i == 1 then
+            cb:SetPoint("TOPLEFT", barsLabel, "BOTTOMLEFT", 0, -8)
+        elseif i == 6 then
+            cb:SetPoint("TOPLEFT", barRefs[1], "BOTTOMLEFT", 0, -4)
+        elseif col == 0 then
+            cb:SetPoint("TOPLEFT", barRefs[i - 5], "BOTTOMLEFT", 0, -4)
+        else
+            cb:SetPoint("TOPLEFT", barRefs[i - 1], "TOPLEFT", 90, 0)
+        end
+        barRefs[i] = cb
         widgets[#widgets + 1] = cb
     end
 

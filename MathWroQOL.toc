@@ -11,3 +11,4 @@ Config.lua
 Features\VehicleBar.lua
 Features\GameMenu.lua
 Features\CDMButton.lua
+Features\AuctionFilter.lua

@@ -13,6 +13,10 @@ local defaults = {
         slashWA = true,
         slashCM = true,
     },
+    auctionFilter = {
+        currentExpansionOnly = true,
+        usableOnly = false,
+    },
 }
 
 local function applyDefaults(target, source)
