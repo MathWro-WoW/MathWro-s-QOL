@@ -3,6 +3,7 @@
 ## Notes: Quality of Life improvements by MathWro
 ## Author: MathWro
 ## Version: @project-version@
+## X-Curse-Project-ID: 1482222
 ## SavedVariables: MathWroQOLDB
 
 Core.lua
