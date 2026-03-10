@@ -14,7 +14,7 @@ local defaults = {
         slashCM = true,
     },
     auctionFilter = {
-        currentExpansionOnly = true,
+        currentExpansionOnly = false,
         usableOnly = false,
     },
 }
