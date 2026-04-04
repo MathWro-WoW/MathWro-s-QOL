@@ -14,3 +14,7 @@ Features\CDMButton.lua
 Features\AuctionFilter.lua
 Features\CombatLog.lua
 Features\EditModeNudge.lua
+Features\CombatTracker.lua
+Features\CombatTracker_Racials.lua
+Features\CombatTracker_Trinkets.lua
+Features\CombatTracker_Consumables.lua

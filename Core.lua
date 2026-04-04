@@ -28,6 +28,51 @@ local defaults = {
     editModeNudge = {
         enabled = true,
     },
+    combatTracker = {
+        enabled = true,
+        frames = {
+            racials = {
+                point = "CENTER", x = -220, y = 200,
+                layout = "horizontal",
+                gridCols = 2,
+                iconWidth = 36,
+                iconHeight = 36,
+                mergeInto = nil,
+                enabled = true,
+            },
+            trinkets = {
+                point = "CENTER", x = 0, y = 200,
+                layout = "horizontal",
+                gridCols = 2,
+                iconWidth = 36,
+                iconHeight = 36,
+                mergeInto = nil,
+                enabled = true,
+                onUseOnly = false,
+            },
+            consumables = {
+                point = "CENTER", x = 220, y = 200,
+                layout = "horizontal",
+                gridCols = 2,
+                iconWidth = 36,
+                iconHeight = 36,
+                mergeInto = nil,
+                enabled = true,
+                hideIfMissing = true,
+                showCombatPotions = true,
+                showHealingPotions = true,
+                showManaPotions = true,
+                showHealthstone = true,
+                customItems = {},
+            },
+        },
+        racials = {
+            hiddenSpells = {},
+        },
+        masque = {
+            enabled = false,
+        },
+    },
 }
 
 local function applyDefaults(target, source)
