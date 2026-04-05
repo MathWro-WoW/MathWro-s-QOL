@@ -46,11 +46,70 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     _G[sliderName .. "High"]:SetText(tostring(maxVal))
     _G[sliderName .. "Text"]:SetText("")
 
-    -- FontString always renders on SetText; EditBox has unfocused-repaint bugs.
-    local valueLabel = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    valueLabel:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+    -- Display: clickable FontString (always renders). Click → shows EditBox.
+    local displayBtn = CreateFrame("Button", nil, container, "BackdropTemplate")
+    displayBtn:SetSize(40, 20)
+    displayBtn:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+    displayBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false, edgeSize = 1,
+        insets = { left=1, right=1, top=1, bottom=1 },
+    })
+    displayBtn:SetBackdropColor(0, 0, 0, 0.5)
+    displayBtn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+    local valueLabel = displayBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    valueLabel:SetAllPoints()
+    valueLabel:SetJustifyH("CENTER")
+
+    -- Edit: EditBox shown only while user types; hidden otherwise.
+    -- Focused EditBoxes always paint their text, avoiding the repaint bug.
+    local input = CreateFrame("EditBox", nil, container, "BackdropTemplate")
+    input:SetFontObject(GameFontHighlightSmall)
+    input:SetJustifyH("CENTER")
+    input:SetSize(40, 20)
+    input:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+    input:SetAutoFocus(false)
+    input:SetMaxLetters(3)
+    input:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false, edgeSize = 1,
+        insets = { left=1, right=1, top=1, bottom=1 },
+    })
+    input:SetBackdropColor(0, 0, 0, 0.5)
+    input:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
+    input:Hide()
 
     local syncing = false
+
+    local function showInput()
+        input:SetText(tostring(getVal()))
+        displayBtn:Hide()
+        input:Show()
+        input:SetFocus()
+        input:HighlightText()
+    end
+
+    local function commitInput()
+        local val = tonumber(input:GetText())
+        if val then
+            val = math.max(minVal, math.min(maxVal, math.floor(val + 0.5)))
+            syncing = true
+            slider:SetValue(val)
+            syncing = false
+            setVal(val)
+        end
+        valueLabel:SetText(tostring(getVal()))
+        input:Hide()
+        displayBtn:Show()
+    end
+
+    displayBtn:SetScript("OnClick", showInput)
+    input:SetScript("OnEnterPressed", function(self) commitInput(); self:ClearFocus() end)
+    input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    input:SetScript("OnEditFocusLost", commitInput)
 
     slider:SetScript("OnValueChanged", function(self, value)
         if syncing then return end
