@@ -51,7 +51,6 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     input:SetPoint("LEFT", slider, "RIGHT", 10, 0)
     input:SetAutoFocus(false)
     input:SetMaxLetters(3)
-    input:SetNumeric(true)
 
     local syncing = false
 
