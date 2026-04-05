@@ -65,15 +65,21 @@ end
 function EditModeNudge:UpdateCoordLabel()
     if not coordLabel or not selectedFrame then return end
 
-    local _, _, _, offsetX, offsetY = selectedFrame:GetPoint(1)
-    if not offsetX then
+    local centerX, centerY = selectedFrame:GetCenter()
+    if not centerX then
         coordLabel:SetText("")
         return
     end
 
+    -- Convert to screen-centre-relative coordinates
+    local screenCenterX = UIParent:GetWidth() / 2
+    local screenCenterY = UIParent:GetHeight() / 2
+    local relativeX = centerX - screenCenterX
+    local relativeY = centerY - screenCenterY
+
     coordLabel:SetFormattedText(
         "X: %.1f  Y: %.1f",
-        offsetX or 0, offsetY or 0
+        relativeX, relativeY
     )
 end
 
