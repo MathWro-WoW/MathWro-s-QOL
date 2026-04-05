@@ -1041,7 +1041,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         local parentCat = Settings.RegisterCanvasLayoutCategory(parentPanel, parentPanel.name)
-        Settings.RegisterCanvasLayoutSubcategory(parentCat, generalPanel,  generalPanel.name)
+        local generalCat = Settings.RegisterCanvasLayoutSubcategory(parentCat, generalPanel,  generalPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel,    elvuiPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, editModePanel, editModePanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatTrackerPanel, combatTrackerPanel.name)
@@ -1049,7 +1049,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
 
         SLASH_MQOL1 = "/mqol"
         SlashCmdList["MQOL"] = function()
-            Settings.OpenToCategory(parentCat:GetID())
+            Settings.OpenToCategory(generalCat:GetID())
         end
     else
         -- Fallback for older API
@@ -1061,7 +1061,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
 
         SLASH_MQOL1 = "/mqol"
         SlashCmdList["MQOL"] = function()
-            InterfaceOptionsFrame_OpenToCategory(parentPanel)
+            InterfaceOptionsFrame_OpenToCategory(generalPanel)
         end
     end
 end)
