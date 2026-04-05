@@ -130,42 +130,46 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     return container
 end
 
--- ── Cycle button (click to advance through options) ───────────────────────────
+-- ── Dropdown (UIDropDownMenu) ─────────────────────────────────────────────────
 -- options: array of { label=string, value=any }
 -- getValue() returns current value; setValue(v) stores it.
--- Returns a button with .Refresh() to re-sync display from DB.
-local function MakeCycleButton(parent, options, getValue, setValue)
-    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    btn:SetSize(150, 22)
+-- Returns a frame with .Refresh() to re-sync display from DB.
+local _dropdownCount = 0
+local function MakeDropdown(parent, options, getValue, setValue)
+    _dropdownCount = _dropdownCount + 1
+    local dropdown = CreateFrame("Frame", "MathWroQOL_Dropdown" .. _dropdownCount, parent, "UIDropDownMenuTemplate")
+    UIDropDownMenu_SetWidth(dropdown, 120)
 
     local function refresh()
         local cur = getValue()
         for _, opt in ipairs(options) do
             if opt.value == cur then
-                btn:SetText(opt.label)
+                UIDropDownMenu_SetText(dropdown, opt.label)
                 return
             end
         end
-        btn:SetText(options[1].label)
+        UIDropDownMenu_SetText(dropdown, options[1].label)
     end
 
-    btn:SetScript("OnClick", function()
-        local cur     = getValue()
-        local nextIdx = 1
-        for i, opt in ipairs(options) do
-            if opt.value == cur then
-                nextIdx = (i % #options) + 1
-                break
+    UIDropDownMenu_Initialize(dropdown, function(self, level)
+        local info = UIDropDownMenu_CreateInfo()
+        for _, opt in ipairs(options) do
+            info.text     = opt.label
+            info.value    = opt.value
+            info.checked  = (opt.value == getValue())
+            info.func     = function(btn)
+                setValue(btn.value)
+                UIDropDownMenu_SetSelectedValue(dropdown, btn.value)
+                refresh()
+                addon:NotifyFeature("combatTracker")
             end
+            UIDropDownMenu_AddButton(info, level)
         end
-        setValue(options[nextIdx].value)
-        refresh()
-        addon:NotifyFeature("combatTracker")
     end)
 
     refresh()
-    btn.Refresh = refresh
-    return btn
+    dropdown.Refresh = refresh
+    return dropdown
 end
 
 -- ── Parent panel (title only) ─────────────────────────────────────────────────
@@ -750,11 +754,11 @@ local function BuildCombatTrackerPanel()
         layoutLabel:SetPoint("TOPLEFT", secEnabledCB, "BOTTOMLEFT", 0, -10)
         layoutLabel:SetText("Layout:")
 
-        local layoutBtn = MakeCycleButton(sc, LAYOUT_OPTIONS,
+        local layoutBtn = MakeDropdown(sc, LAYOUT_OPTIONS,
             function() return addon.db.combatTracker.frames[key].layout end,
             function(val) addon.db.combatTracker.frames[key].layout = val end
         )
-        layoutBtn:SetPoint("LEFT", layoutLabel, "RIGHT", 8, 0)
+        layoutBtn:SetPoint("LEFT", layoutLabel, "RIGHT", -16, 0)
         table.insert(refreshFns, function() layoutBtn:Refresh() end)
 
         local gridColsLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -765,11 +769,11 @@ local function BuildCombatTrackerPanel()
         for i = 2, 5 do
             table.insert(COLS_OPTIONS, { label = tostring(i) .. " cols", value = i })
         end
-        local colsBtn = MakeCycleButton(sc, COLS_OPTIONS,
+        local colsBtn = MakeDropdown(sc, COLS_OPTIONS,
             function() return addon.db.combatTracker.frames[key].gridCols end,
             function(val) addon.db.combatTracker.frames[key].gridCols = val end
         )
-        colsBtn:SetPoint("LEFT", gridColsLabel, "RIGHT", 8, 0)
+        colsBtn:SetPoint("LEFT", gridColsLabel, "RIGHT", -16, 0)
         table.insert(refreshFns, function() colsBtn:Refresh() end)
 
         local widthSlider = MakeSliderWithInput(sc, "Icon Width (px)", 16, 80,
@@ -805,7 +809,7 @@ local function BuildCombatTrackerPanel()
         mergeLabel:SetPoint("TOPLEFT", heightSlider, "BOTTOMLEFT", 0, -10)
         mergeLabel:SetText("Merge into:")
 
-        local mergeBtn = MakeCycleButton(sc, mergeOptions,
+        local mergeBtn = MakeDropdown(sc, mergeOptions,
             function()
                 return addon.db.combatTracker.frames[key].mergeInto or "none"
             end,
@@ -814,7 +818,7 @@ local function BuildCombatTrackerPanel()
                 addon:NotifyFeature("combatTracker")
             end
         )
-        mergeBtn:SetPoint("LEFT", mergeLabel, "RIGHT", 8, 0)
+        mergeBtn:SetPoint("LEFT", mergeLabel, "RIGHT", -16, 0)
         table.insert(refreshFns, function() mergeBtn:Refresh() end)
 
         local lastWidget = mergeLabel
