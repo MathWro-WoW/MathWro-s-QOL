@@ -4,7 +4,7 @@ local _, addon = ...
 
 local function MakeSeparator(parent, anchor, offsetY)
     local line = parent:CreateTexture(nil, "ARTWORK")
-    line:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+    line:SetColorTexture(0.3, 0.3, 0.3, 0.8)
     line:SetHeight(1)
     line:SetWidth(550)
     line:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, offsetY)
@@ -31,7 +31,7 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     local container = CreateFrame("Frame", nil, parent)
     container:SetSize(300, 50)
 
-    local lbl = container:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    local lbl = container:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     lbl:SetPoint("TOPLEFT", 0, 0)
     lbl:SetText(label)
 
@@ -659,6 +659,7 @@ local function BuildCombatTrackerPanel()
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Combat Tracker")
+    title:SetTextColor(1, 0.82, 0, 1)
 
     local bg = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     bg:SetPoint("TOPLEFT",     title, "BOTTOMLEFT", -6, -8)
@@ -697,7 +698,7 @@ local function BuildCombatTrackerPanel()
 
     -- ── Global enable ──────────────────────────────────────────────────────────
 
-    local enableCB = MakeCheckbox(sc, "Enable Combat Tracker", 8, -12,
+    local enableCB = MakeCheckbox(sc, "Enable Combat Tracker", 8, -16,
         function() return addon.db.combatTracker.enabled end,
         function(val)
             addon.db.combatTracker.enabled = val
@@ -739,6 +740,7 @@ local function BuildCombatTrackerPanel()
         local lbl = sc:CreateFontString(nil, "ARTWORK", "GameFontNormal")
         lbl:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -10)
         lbl:SetText(sectionTitle)
+        lbl:SetTextColor(1, 0.82, 0, 1)
 
         local secEnabledCB = MakeCheckbox(sc, "Enable", 0, 0,
             function() return addon.db.combatTracker.frames[key].enabled end,
@@ -1015,6 +1017,7 @@ local function BuildCombatTrackerPanel()
         local masqueLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontNormal")
         masqueLabel:SetPoint("TOPLEFT", sep3, "BOTTOMLEFT", 0, -10)
         masqueLabel:SetText("MASQUE SKINNING")
+        masqueLabel:SetTextColor(1, 0.82, 0, 1)
 
         local masqueCB = MakeCheckbox(sc, "Enable Masque skinning", 0, 0,
             function() return addon.db.combatTracker.masque.enabled end,
