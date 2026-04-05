@@ -29,7 +29,7 @@ local defaults = {
         enabled = true,
     },
     combatTracker = {
-        enabled = true,
+        enabled = false,
         frames = {
             racials = {
                 point = "CENTER", x = -220, y = 200,
@@ -48,7 +48,7 @@ local defaults = {
                 iconHeight = 36,
                 mergeInto = nil,
                 enabled = true,
-                onUseOnly = false,
+                onUseOnly = true,
             },
             consumables = {
                 point = "CENTER", x = 220, y = 200,
