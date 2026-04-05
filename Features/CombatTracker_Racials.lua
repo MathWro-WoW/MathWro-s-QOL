@@ -141,6 +141,8 @@ function racials:RebuildIcons()
         end
     end
 
+    CT:ApplySectionFont("racials")
+    CT:ApplyCooldownFont("racials")
     self:UpdateCooldowns()
     CT:LayoutSection(CT:GetHostKey("racials"))
 end

@@ -78,6 +78,8 @@ function trinkets:RebuildIcons()
         end
     end
 
+    CT:ApplySectionFont("trinkets")
+    CT:ApplyCooldownFont("trinkets")
     self:UpdateCooldowns()
     CT:LayoutSection(CT:GetHostKey("trinkets"))
 end

@@ -39,11 +39,107 @@ function CT.CreateButton()
     cd:SetDrawEdge(true)
     btn.cooldown = cd
 
+    -- Stack count label (bottom-right; used by sections that track item quantities)
+    local countText = btn:CreateFontString(nil, "OVERLAY")
+    countText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+    countText:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 2, 2)
+    countText:SetJustifyH("RIGHT")
+    countText:SetTextColor(1, 1, 1, 1)
+    countText:Hide()
+    btn.countText = countText
+
+    -- Cooldown countdown label (centered; replaces built-in CooldownFrame numbers)
+    local cdCountText = btn:CreateFontString(nil, "OVERLAY")
+    cdCountText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    cdCountText:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    cdCountText:SetJustifyH("CENTER")
+    cdCountText:SetTextColor(1, 1, 1, 1)
+    cdCountText:Hide()
+    btn.cdCountText = cdCountText
+
     btn._cdStart     = nil
     btn._cdDuration  = nil
     btn._sectionName = nil  -- set by section when added to pool
 
     return btn
+end
+
+-- ── Shared font applicators ───────────────────────────────────────────────────
+
+-- Applies the section's configured font/size to every button's stack countText.
+function CT:ApplySectionFont(sectionName)
+    local frameDb  = addon.db.combatTracker.frames[sectionName]
+    local font     = frameDb.stackCountFont     or "Fonts\\FRIZQT__.TTF"
+    local fontSize = frameDb.stackCountFontSize or 12
+    local sec      = sectionMap[sectionName]
+    if sec then
+        for _, btn in ipairs(sec.buttons) do
+            if btn.countText then
+                btn.countText:SetFont(font, fontSize, "OUTLINE")
+            end
+        end
+    end
+end
+
+-- Applies the section's cooldown text font/size and toggles the built-in
+-- WoW countdown numbers (hidden when our custom text is enabled).
+function CT:ApplyCooldownFont(sectionName)
+    local frameDb  = addon.db.combatTracker.frames[sectionName]
+    local enabled  = frameDb.cdCountEnabled ~= false
+    local font     = frameDb.cdCountFont     or "Fonts\\FRIZQT__.TTF"
+    local fontSize = frameDb.cdCountFontSize or 14
+    local sec      = sectionMap[sectionName]
+    if sec then
+        for _, btn in ipairs(sec.buttons) do
+            if btn.cdCountText then
+                btn.cdCountText:SetFont(font, fontSize, "OUTLINE")
+            end
+            -- Hide built-in countdown when our text is active; restore it otherwise
+            if btn.cooldown and btn.cooldown.SetHideCountdownNumbers then
+                btn.cooldown:SetHideCountdownNumbers(enabled)
+            end
+        end
+    end
+end
+
+-- Formats a remaining-seconds value into a compact countdown string.
+local function FormatCooldownTime(remaining)
+    if remaining >= 3600 then
+        return string.format("%dh", math.floor(remaining / 3600))
+    elseif remaining >= 60 then
+        return string.format("%dm", math.floor(remaining / 60))
+    elseif remaining >= 10 then
+        return string.format("%d",  math.floor(remaining))
+    else
+        return string.format("%.1f", remaining)
+    end
+end
+
+-- Ticked every 0.1 s; updates the custom cooldown countdown text on all buttons.
+function CT:UpdateAllCooldownTexts()
+    local now = GetTime()
+    for _, sec in ipairs(sections) do
+        local frameDb = addon.db.combatTracker.frames[sec.name]
+        local enabled = frameDb.cdCountEnabled ~= false
+        for _, btn in ipairs(sec.buttons) do
+            if btn.cdCountText and btn:IsShown() then
+                if enabled
+                    and btn._cdStart    and btn._cdStart    > 0
+                    and btn._cdDuration and btn._cdDuration > 1.5
+                then
+                    local remaining = btn._cdStart + btn._cdDuration - now
+                    if remaining > 0 then
+                        btn.cdCountText:SetText(FormatCooldownTime(remaining))
+                        btn.cdCountText:Show()
+                    else
+                        btn.cdCountText:Hide()
+                    end
+                else
+                    btn.cdCountText:Hide()
+                end
+            end
+        end
+    end
 end
 
 -- ── Shared cooldown updater ───────────────────────────────────────────────────
@@ -109,13 +205,42 @@ function CT:LayoutSection(key)
         end
     end
 
-    -- Position icons
-    local w       = frameDb.iconWidth
-    local h       = frameDb.iconHeight
-    local layout  = frameDb.layout
-    local cols    = frameDb.gridCols
-    local padding = 2
+    local w        = frameDb.iconWidth
+    local h        = frameDb.iconHeight
+    local layout   = frameDb.layout
+    local cols     = frameDb.gridCols
+    local growDir  = frameDb.growDirection or "growRight"
+    local padding  = 2
 
+    -- Snapshot the stable anchor edge BEFORE any resize so it stays fixed
+    -- when icons are added or removed.
+    local scW, scH = UIParent:GetWidth(), UIParent:GetHeight()
+    local stableAnchor, stableX, stableY
+    if growDir == "growLeft" then
+        stableAnchor = "TOPRIGHT"
+        stableX = (frame:GetRight() or (scW/2 + (frameDb.x or 0) + 18)) - scW
+        stableY = (frame:GetTop()   or (scH/2 + (frameDb.y or 0) + 18)) - scH
+    elseif growDir == "growUp" then
+        stableAnchor = "BOTTOMLEFT"
+        stableX = frame:GetLeft()   or (scW/2 + (frameDb.x or 0) - 18)
+        stableY = frame:GetBottom() or (scH/2 + (frameDb.y or 0) - 18)
+    elseif growDir == "centerH" or growDir == "centerV" then
+        stableAnchor = "CENTER"
+        local cx, cy = frame:GetCenter()
+        if cx and cy then
+            stableX = cx - scW/2
+            stableY = cy - scH/2
+        else
+            stableX = frameDb.x or 0
+            stableY = frameDb.y or 0
+        end
+    else  -- growRight, growDown (anchor top-left edge)
+        stableAnchor = "TOPLEFT"
+        stableX = frame:GetLeft() or (scW/2 + (frameDb.x or 0) - 18)
+        stableY = (frame:GetTop() or (scH/2 + (frameDb.y or 0) + 18)) - scH
+    end
+
+    -- Position icons relative to the appropriate frame corner
     for i, btn in ipairs(icons) do
         btn:SetSize(w, h)
         btn:ClearAllPoints()
@@ -128,15 +253,24 @@ function CT:LayoutSection(key)
             col = (i - 1) % cols
             row = math.floor((i - 1) / cols)
         end
-        btn:SetPoint("TOPLEFT", frame, "TOPLEFT", col * (w + padding), -(row * (h + padding)))
 
-        -- Let Masque recalculate skin offsets at the new size
+        if growDir == "growLeft" then
+            -- Anchor icons from the right edge; col=0 is rightmost
+            btn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -(col * (w + padding)), -(row * (h + padding)))
+        elseif growDir == "growUp" then
+            -- Anchor icons from the bottom edge; row=0 is bottommost
+            btn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", col * (w + padding), row * (h + padding))
+        else
+            btn:SetPoint("TOPLEFT", frame, "TOPLEFT", col * (w + padding), -(row * (h + padding)))
+        end
+
         if masqueOn and btn._sectionName and masqueGroups[btn._sectionName] then
             masqueGroups[btn._sectionName]:ReSkin(btn)
         end
     end
 
-    -- Resize anchor frame to fit its icons
+    -- Compute new frame size
+    local newW, newH
     if #icons > 0 then
         local totalCols, totalRows
         if layout == "horizontal" then
@@ -147,13 +281,20 @@ function CT:LayoutSection(key)
             totalCols = math.min(#icons, cols)
             totalRows = math.ceil(#icons / cols)
         end
-        frame:SetSize(
-            totalCols * w + (totalCols - 1) * padding,
-            totalRows * h + (totalRows - 1) * padding
-        )
+        newW = totalCols * w + (totalCols - 1) * padding
+        newH = totalRows * h + (totalRows - 1) * padding
     else
-        frame:SetSize(36, 36)  -- keep draggable when empty
+        newW, newH = 36, 36
     end
+
+    -- Resize and re-anchor at the stable edge so icons don't drift when count changes
+    frame:SetSize(newW, newH)
+    frame:ClearAllPoints()
+    frame:SetPoint(stableAnchor, UIParent, stableAnchor, stableX, stableY)
+    frame:SetClampedToScreen(true)
+    frameDb.point = stableAnchor
+    frameDb.x     = math.floor(stableX + 0.5)
+    frameDb.y     = math.floor(stableY + 0.5)
 end
 
 -- ── Section anchor frames ─────────────────────────────────────────────────────
@@ -221,6 +362,9 @@ function CT:Initialize()
         if sec.Initialize then sec:Initialize() end
         sec:RebuildIcons()
     end
+
+    -- Ticker: updates custom cooldown countdown text at 10 Hz
+    C_Timer.NewTicker(0.1, function() CT:UpdateAllCooldownTexts() end)
 
     self:Apply()
 end

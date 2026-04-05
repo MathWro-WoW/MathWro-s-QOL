@@ -172,13 +172,16 @@ local function MakeDropdown(parent, options, getValue, setValue)
 
     local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     btnText:SetPoint("LEFT", 6, 0)
-    btnText:SetPoint("RIGHT", -18, 0)
+    btnText:SetPoint("RIGHT", -22, 0)
     btnText:SetJustifyH("LEFT")
 
     local arrow = btn:CreateTexture(nil, "OVERLAY")
-    arrow:SetSize(12, 12)
-    arrow:SetPoint("RIGHT", -4, 0)
-    arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown")
+    arrow:SetSize(16, 16)
+    arrow:SetPoint("RIGHT", -3, 0)
+    arrow:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
+    arrow:SetTexCoord(0, 1, 0, 0.5)  -- bottom half = down arrow
+    arrow:SetVertexColor(1, 0.82, 0, 1)
+    btn.arrow = arrow
 
     -- Popup list (parented to UIParent so it floats above everything)
     local popup = CreateFrame("Frame", "MathWroQOL_DropPopup" .. _dropdownCount, UIParent, "BackdropTemplate")
@@ -257,8 +260,8 @@ local function MakeDropdown(parent, options, getValue, setValue)
             if p ~= self and p:IsShown() then p:Hide() end
         end
     end)
-    popup:HookScript("OnShow", function() catcher:Show() end)
-    popup:HookScript("OnHide", function() catcher:Hide() end)
+    popup:HookScript("OnShow", function() catcher:Show(); arrow:SetTexCoord(0, 1, 0.5, 1) end)  -- up arrow
+    popup:HookScript("OnHide", function() catcher:Hide(); arrow:SetTexCoord(0, 1, 0, 0.5) end)  -- down arrow
 
     btn:SetScript("OnClick", function()
         if popup:IsShown() then
@@ -373,6 +376,9 @@ local function BuildGeneralPanel()
     _G[slider:GetName().."Low"]:SetText("0.5x")
     _G[slider:GetName().."High"]:SetText("2.0x")
     _G[slider:GetName().."Text"]:SetText("Scale: 1.0x")
+
+    local S = ElvSkin()
+    if S then S:HandleSliderFrame(slider) end
 
     slider:SetScript("OnValueChanged", function(self, value, userInput)
         _G[self:GetName().."Text"]:SetText(string.format("Scale: %.2fx", value))
@@ -812,7 +818,7 @@ local function BuildCombatTrackerPanel()
     end)
 
     local sc = CreateFrame("Frame", nil, scrollFrame)
-    sc:SetSize(530, 1600)
+    sc:SetSize(530, 2000)
     scrollFrame:SetScrollChild(sc)
 
     -- Collect refresh callbacks; called on panel OnShow
@@ -858,6 +864,22 @@ local function BuildCombatTrackerPanel()
         { label = "Horizontal", value = "horizontal" },
         { label = "Vertical",   value = "vertical"   },
         { label = "Grid",       value = "grid"        },
+    }
+
+    local STACK_FONT_OPTIONS = {
+        { label = "Friz Quadrata (Default)", value = "Fonts\\FRIZQT__.TTF" },
+        { label = "Arial Narrow",            value = "Fonts\\ARIALN.TTF"   },
+        { label = "Morpheus",                value = "Fonts\\MORPHEUS.TTF" },
+        { label = "Skurri",                  value = "Fonts\\skurri.TTF"   },
+    }
+
+    local GROW_DIR_OPTIONS = {
+        { label = "Grow Right",       value = "growRight" },
+        { label = "Grow Left",        value = "growLeft"  },
+        { label = "Grow Down",        value = "growDown"  },
+        { label = "Grow Up",          value = "growUp"    },
+        { label = "Center Horiz.",    value = "centerH"   },
+        { label = "Center Vert.",     value = "centerV"   },
     }
 
     local function BuildSectionBlock(anchor, key, sectionTitle, extraFn)
@@ -947,9 +969,96 @@ local function BuildCombatTrackerPanel()
         mergeBtn:SetPoint("LEFT", mergeLabel, "RIGHT", 8, 0)
         table.insert(refreshFns, function() mergeBtn:Refresh() end)
 
-        local lastWidget = mergeLabel
+        local growDirLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        growDirLabel:SetPoint("TOPLEFT", mergeLabel, "BOTTOMLEFT", 0, -10)
+        growDirLabel:SetText("Anchor direction:")
+
+        local growDirBtn = MakeDropdown(sc, GROW_DIR_OPTIONS,
+            function() return addon.db.combatTracker.frames[key].growDirection or "growRight" end,
+            function(val)
+                addon.db.combatTracker.frames[key].growDirection = val
+                addon:NotifyFeature("combatTracker")
+            end
+        )
+        growDirBtn:SetPoint("LEFT", growDirLabel, "RIGHT", 8, 0)
+        table.insert(refreshFns, function() growDirBtn:Refresh() end)
+
+        local stackEnabledCB = MakeCheckbox(sc, "Show stack counter on icons", 0, 0,
+            function() return addon.db.combatTracker.frames[key].stackCountEnabled ~= false end,
+            function(val)
+                addon.db.combatTracker.frames[key].stackCountEnabled = val
+                addon:NotifyFeature("combatTracker")
+            end
+        )
+        stackEnabledCB:ClearAllPoints()
+        stackEnabledCB:SetPoint("TOPLEFT", growDirLabel, "BOTTOMLEFT", 0, -10)
+
+        local stackFontSizeSlider = MakeSliderWithInput(sc, "Counter font size", 8, 24,
+            function() return addon.db.combatTracker.frames[key].stackCountFontSize end,
+            function(val)
+                addon.db.combatTracker.frames[key].stackCountFontSize = val
+                addon:NotifyFeature("combatTracker")
+            end
+        )
+        stackFontSizeSlider:SetPoint("TOPLEFT", stackEnabledCB, "BOTTOMLEFT", 0, -8)
+        table.insert(refreshFns, function() stackFontSizeSlider:Refresh() end)
+
+        local stackFontLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        stackFontLabel:SetPoint("TOPLEFT", stackFontSizeSlider, "BOTTOMLEFT", 0, -10)
+        stackFontLabel:SetText("Counter font:")
+
+        local stackFontBtn = MakeDropdown(sc, STACK_FONT_OPTIONS,
+            function()
+                return addon.db.combatTracker.frames[key].stackCountFont or "Fonts\\FRIZQT__.TTF"
+            end,
+            function(val)
+                addon.db.combatTracker.frames[key].stackCountFont = val
+                addon:NotifyFeature("combatTracker")
+            end
+        )
+        stackFontBtn:SetPoint("LEFT", stackFontLabel, "RIGHT", 8, 0)
+        table.insert(refreshFns, function() stackFontBtn:Refresh() end)
+
+        -- Cooldown countdown text font settings
+        local cdEnabledCB = MakeCheckbox(sc, "Show cooldown countdown text", 0, 0,
+            function() return addon.db.combatTracker.frames[key].cdCountEnabled ~= false end,
+            function(val)
+                addon.db.combatTracker.frames[key].cdCountEnabled = val
+                addon:NotifyFeature("combatTracker")
+            end
+        )
+        cdEnabledCB:ClearAllPoints()
+        cdEnabledCB:SetPoint("TOPLEFT", stackFontLabel, "BOTTOMLEFT", 0, -10)
+
+        local cdFontSizeSlider = MakeSliderWithInput(sc, "Cooldown font size", 8, 24,
+            function() return addon.db.combatTracker.frames[key].cdCountFontSize end,
+            function(val)
+                addon.db.combatTracker.frames[key].cdCountFontSize = val
+                addon:NotifyFeature("combatTracker")
+            end
+        )
+        cdFontSizeSlider:SetPoint("TOPLEFT", cdEnabledCB, "BOTTOMLEFT", 0, -8)
+        table.insert(refreshFns, function() cdFontSizeSlider:Refresh() end)
+
+        local cdFontLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        cdFontLabel:SetPoint("TOPLEFT", cdFontSizeSlider, "BOTTOMLEFT", 0, -10)
+        cdFontLabel:SetText("Cooldown font:")
+
+        local cdFontBtn = MakeDropdown(sc, STACK_FONT_OPTIONS,
+            function()
+                return addon.db.combatTracker.frames[key].cdCountFont or "Fonts\\FRIZQT__.TTF"
+            end,
+            function(val)
+                addon.db.combatTracker.frames[key].cdCountFont = val
+                addon:NotifyFeature("combatTracker")
+            end
+        )
+        cdFontBtn:SetPoint("LEFT", cdFontLabel, "RIGHT", 8, 0)
+        table.insert(refreshFns, function() cdFontBtn:Refresh() end)
+
+        local lastWidget = cdFontLabel
         if extraFn then
-            lastWidget = extraFn(mergeLabel) or mergeLabel
+            lastWidget = extraFn(stackFontLabel) or stackFontLabel
         end
 
         return lastWidget
@@ -1090,46 +1199,123 @@ local function BuildCombatTrackerPanel()
 
         local customLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
         customLabel:SetPoint("TOPLEFT", manaCB, "BOTTOMLEFT", 0, -14)
-        customLabel:SetWidth(500)
         customLabel:SetJustifyH("LEFT")
-        customLabel:SetText("Custom item IDs (comma-separated):")
+        customLabel:SetText("Custom Items — enter an item ID and press Add:")
 
-        local customBox = CreateFrame("EditBox", nil, sc, "InputBoxTemplate")
-        customBox:SetSize(300, 20)
-        customBox:SetPoint("TOPLEFT", customLabel, "BOTTOMLEFT", 0, -6)
-        customBox:SetAutoFocus(false)
-        customBox:SetMaxLetters(200)
+        -- Input row: numeric EditBox + Add button
+        local idBox = CreateFrame("EditBox", nil, sc, "InputBoxTemplate")
+        idBox:SetSize(80, 20)
+        idBox:SetNumeric(true)
+        idBox:SetAutoFocus(false)
+        idBox:SetMaxLetters(10)
+        idBox:SetPoint("TOPLEFT", customLabel, "BOTTOMLEFT", 0, -6)
 
-        local function parseCustomItems(str)
-            local result = {}
-            for id in str:gmatch("%d+") do
-                result[tonumber(id)] = true
-            end
-            return result
-        end
+        local addBtn = CreateFrame("Button", nil, sc, "UIPanelButtonTemplate")
+        addBtn:SetSize(60, 22)
+        addBtn:SetText("Add")
+        local Sc = ElvSkin()
+        if Sc then Sc:HandleButton(addBtn) end
+        addBtn:SetPoint("LEFT", idBox, "RIGHT", 6, 1)
 
-        local function customItemsToString(tbl)
+        -- Container for the item list rows
+        local itemListFrame = CreateFrame("Frame", nil, sc)
+        itemListFrame:SetPoint("TOPLEFT", idBox, "BOTTOMLEFT", 0, -6)
+        itemListFrame:SetSize(420, 10)
+
+        local itemRowPool = {}
+
+        local function RebuildItemList()
+            for _, r in ipairs(itemRowPool) do r:Hide() end
+
+            local ci  = addon.db.combatTracker.frames.consumables.customItems or {}
             local ids = {}
-            for id in pairs(tbl or {}) do table.insert(ids, tostring(id)) end
+            for id in pairs(ci) do table.insert(ids, id) end
             table.sort(ids)
-            return table.concat(ids, ", ")
+
+            local ROW_H   = 28
+            local prevRow = nil
+            for idx, id in ipairs(ids) do
+                local row = itemRowPool[idx]
+                if not row then
+                    row = CreateFrame("Frame", nil, itemListFrame)
+                    row:SetHeight(ROW_H)
+                    row:SetWidth(420)
+
+                    local iconTex = row:CreateTexture(nil, "ARTWORK")
+                    iconTex:SetSize(24, 24)
+                    iconTex:SetPoint("LEFT", 0, 0)
+                    iconTex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+                    row.iconTex = iconTex
+
+                    local nameFStr = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    nameFStr:SetPoint("LEFT", 30, 0)
+                    nameFStr:SetPoint("RIGHT", -28, 0)
+                    nameFStr:SetJustifyH("LEFT")
+                    row.nameFStr = nameFStr
+
+                    local removeBtn = CreateFrame("Button", nil, row)
+                    removeBtn:SetSize(22, 22)
+                    removeBtn:SetPoint("RIGHT", 0, 0)
+                    local xt = removeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                    xt:SetAllPoints()
+                    xt:SetText("×")
+                    xt:SetTextColor(0.8, 0.3, 0.3, 1)
+                    row.removeBtn = removeBtn
+
+                    table.insert(itemRowPool, row)
+                end
+
+                row:ClearAllPoints()
+                if prevRow then
+                    row:SetPoint("TOPLEFT", prevRow, "BOTTOMLEFT", 0, -2)
+                else
+                    row:SetPoint("TOPLEFT", itemListFrame, "TOPLEFT", 0, 0)
+                end
+
+                local itemName, _, _, _, _, _, _, _, _, itemIcon = GetItemInfo(id)
+                if itemIcon then
+                    row.iconTex:SetTexture(itemIcon)
+                else
+                    row.iconTex:SetTexture(134400)
+                    C_Item.RequestLoadItemDataByID(id)
+                end
+                row.nameFStr:SetText(itemName or ("Item #" .. id))
+
+                local capturedID = id
+                row.removeBtn:SetScript("OnClick", function()
+                    addon.db.combatTracker.frames.consumables.customItems[capturedID] = nil
+                    addon:NotifyFeature("combatTracker")
+                    RebuildItemList()
+                end)
+
+                row:Show()
+                prevRow = row
+            end
+            itemListFrame:SetHeight(math.max(#ids * (ROW_H + 2), 10))
         end
 
-        customBox:SetScript("OnEnterPressed", function(self)
-            addon.db.combatTracker.frames.consumables.customItems = parseCustomItems(self:GetText())
-            self:ClearFocus()
-            addon:NotifyFeature("combatTracker")
+        addBtn:SetScript("OnClick", function()
+            local id = tonumber(idBox:GetText())
+            if id and id > 0 then
+                addon.db.combatTracker.frames.consumables.customItems[id] = true
+                idBox:SetText("")
+                idBox:ClearFocus()
+                addon:NotifyFeature("combatTracker")
+                RebuildItemList()
+            end
         end)
-        customBox:SetScript("OnEditFocusLost", function(self)
-            addon.db.combatTracker.frames.consumables.customItems = parseCustomItems(self:GetText())
-            addon:NotifyFeature("combatTracker")
+        idBox:SetScript("OnEnterPressed", function() addBtn:Click() end)
+
+        -- Refresh GET_ITEM_INFO_RECEIVED while panel is visible so icons populate
+        local infoFrame = CreateFrame("Frame")
+        infoFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+        infoFrame:SetScript("OnEvent", function()
+            if itemListFrame:IsVisible() then RebuildItemList() end
         end)
 
-        table.insert(refreshFns, function()
-            customBox:SetText(customItemsToString(addon.db.combatTracker.frames.consumables.customItems))
-        end)
+        table.insert(refreshFns, RebuildItemList)
 
-        return customBox
+        return itemListFrame
     end)
 
     local sep3 = MakeSeparator(sc, lastConsWidget, -12)
