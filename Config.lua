@@ -134,6 +134,7 @@ end
 -- options: array of { label=string, value=any }
 -- getValue() returns current value; setValue(v) stores it.
 -- Returns a frame with .Refresh() to re-sync display from DB.
+local _openDropdownPopups = {}
 local _dropdownCount = 0
 local function MakeDropdown(parent, options, getValue, setValue)
     _dropdownCount = _dropdownCount + 1
@@ -162,6 +163,7 @@ local function MakeDropdown(parent, options, getValue, setValue)
 
     -- Popup list (parented to UIParent so it floats above everything)
     local popup = CreateFrame("Frame", "MathWroQOL_DropPopup" .. _dropdownCount, UIParent, "BackdropTemplate")
+    table.insert(_openDropdownPopups, popup)
     popup:SetFrameStrata("TOOLTIP")
     popup:SetWidth(130)
     popup:SetBackdrop({
@@ -220,11 +222,16 @@ local function MakeDropdown(parent, options, getValue, setValue)
     local catcher = CreateFrame("Frame", nil, UIParent)
     catcher:SetAllPoints(UIParent)
     catcher:SetFrameStrata("DIALOG")
-    catcher:SetFrameLevel(popup:GetFrameLevel() - 1)
+    catcher:SetFrameLevel(2)
     catcher:EnableMouse(true)
     catcher:Hide()
     catcher:SetScript("OnMouseDown", function()
         popup:Hide()
+    end)
+    popup:HookScript("OnShow", function(self)
+        for _, p in ipairs(_openDropdownPopups) do
+            if p ~= self and p:IsShown() then p:Hide() end
+        end
     end)
     popup:HookScript("OnShow", function() catcher:Show() end)
     popup:HookScript("OnHide", function() catcher:Hide() end)
