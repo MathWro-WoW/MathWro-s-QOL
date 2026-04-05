@@ -156,10 +156,10 @@ function CT:LayoutSection(key)
     end
 end
 
--- ── Draggable section frames ──────────────────────────────────────────────────
+-- ── Section anchor frames ─────────────────────────────────────────────────────
 
--- Creates a draggable, invisible anchor frame for a section.
--- Saves position to DB on drag stop.
+-- Creates an invisible anchor frame for a section and registers it with
+-- LibEditMode so it gets the native gold-glow highlight and drag in Edit Mode.
 function CT:CreateSectionFrame(key)
     local db      = addon.db.combatTracker
     local frameDb = db.frames[key]
@@ -173,55 +173,22 @@ function CT:CreateSectionFrame(key)
         frameDb.x or 0,
         frameDb.y or 0
     )
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
     frame:SetClampedToScreen(true)
 
-    frame:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    frame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local point, _, _, x, y = self:GetPoint()
-        db.frames[key].point = point
-        db.frames[key].x     = math.floor(x + 0.5)
-        db.frames[key].y     = math.floor(y + 0.5)
-    end)
-
-    -- Edit Mode overlay: shown only in Edit Mode, sits above buttons, handles drag
-    local overlay = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-    overlay:SetFrameStrata("HIGH")
-    overlay:SetFrameLevel(20)
-    overlay:SetPoint("TOPLEFT",     frame, "TOPLEFT")
-    overlay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT")
-    overlay:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-        insets   = { left=1, right=1, top=1, bottom=1 },
-    })
-    overlay:SetBackdropColor(0, 0.44, 0.87, 0.25)
-    overlay:SetBackdropBorderColor(0, 0.44, 0.87, 0.9)
-    overlay:EnableMouse(true)
-    overlay:RegisterForDrag("LeftButton")
-    overlay:SetScript("OnDragStart", function(self)
-        frame:StartMoving()
-        self:SetBackdropColor(0, 0.44, 0.87, 0.5)
-    end)
-    overlay:SetScript("OnDragStop", function(self)
-        frame:StopMovingOrSizing()
-        self:SetBackdropColor(0, 0.44, 0.87, 0.25)
-        local point, _, _, x, y = frame:GetPoint()
-        db.frames[key].point = point
-        db.frames[key].x     = math.floor(x + 0.5)
-        db.frames[key].y     = math.floor(y + 0.5)
-    end)
-    overlay:Hide()
-
-    local label = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    label:SetPoint("CENTER")
-    label:SetText(key:sub(1,1):upper() .. key:sub(2))
-
-    frame.editOverlay = overlay
+    local LibEditMode = LibStub and LibStub("LibEditMode", true)
+    if LibEditMode then
+        local displayName = "MathWroQOL - CT " .. key:sub(1,1):upper() .. key:sub(2)
+        LibEditMode:AddFrame(frame, function(_, _, point, x, y)
+            db.frames[key].point = point
+            db.frames[key].x     = math.floor(x + 0.5)
+            db.frames[key].y     = math.floor(y + 0.5)
+            CT:LayoutSection(CT:GetHostKey(key))
+        end, {
+            point = frameDb.point or "CENTER",
+            x     = frameDb.x or 0,
+            y     = frameDb.y or 0,
+        }, displayName)
+    end
 
     return frame
 end
@@ -242,41 +209,7 @@ function CT:Initialize()
         sec:RebuildIcons()
     end
 
-    -- Hook Edit Mode enter/exit to show/hide overlays
-    if EditModeManagerFrame then
-        if EditModeManagerFrame.EnterEditMode then
-            hooksecurefunc(EditModeManagerFrame, "EnterEditMode", function()
-                self:UpdateEditOverlays(true)
-            end)
-        end
-        hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function()
-            self:UpdateEditOverlays(false)
-        end)
-        -- Apply initial state in case Edit Mode is already active on login
-        if EditModeManagerFrame:IsEditModeActive() then
-            self:UpdateEditOverlays(true)
-        end
-    end
-
     self:Apply()
-end
-
-function CT:UpdateEditOverlays(show)
-    local db = addon.db.combatTracker
-    for _, sec in ipairs(sections) do
-        local frame = self.frames[sec.name]
-        if frame and frame.editOverlay then
-            local frameDb = db.frames[sec.name]
-            local isMerged = frameDb.mergeInto
-                and frameDb.mergeInto ~= sec.name
-                and self.frames[frameDb.mergeInto] ~= nil
-            if show and db.enabled and frameDb.enabled and not isMerged then
-                frame.editOverlay:Show()
-            else
-                frame.editOverlay:Hide()
-            end
-        end
-    end
 end
 
 function CT:Apply()
