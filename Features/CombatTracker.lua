@@ -216,19 +216,17 @@ function CT:Apply()
     for _, sec in ipairs(sections) do
         local frameDb = db.frames[sec.name]
         local frame   = self.frames[sec.name]
-        if not frame then goto continue end
+        if frame then
+            local isMerged = frameDb.mergeInto
+                and frameDb.mergeInto ~= sec.name
+                and self.frames[frameDb.mergeInto] ~= nil
 
-        local isMerged = frameDb.mergeInto
-            and frameDb.mergeInto ~= sec.name
-            and self.frames[frameDb.mergeInto] ~= nil
-
-        if not db.enabled or not frameDb.enabled or isMerged then
-            frame:Hide()
-        else
-            frame:Show()
+            if not db.enabled or not frameDb.enabled or isMerged then
+                frame:Hide()
+            else
+                frame:Show()
+            end
         end
-
-        ::continue::
     end
 
     -- Full data scan for all sections (handles enabled/disabled toggles, filter changes)
