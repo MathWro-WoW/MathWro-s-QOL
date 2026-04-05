@@ -89,6 +89,7 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
         syncing = false
     end
 
+    container:Refresh()
     return container
 end
 
