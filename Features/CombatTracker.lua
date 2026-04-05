@@ -43,6 +43,35 @@ function CT.CreateButton()
     btn._cdDuration  = nil
     btn._sectionName = nil  -- set by section when added to pool
 
+    -- Forward drag events to the host section frame so icons are draggable
+    btn:RegisterForDrag("LeftButton")
+    btn:SetScript("OnDragStart", function(self)
+        local key = self._sectionName
+        if not key then return end
+        local hostKey = CT:GetHostKey(key)
+        local frame = CT.frames[hostKey]
+        if frame then
+            self._dragFrame = frame
+            frame:StartMoving()
+        end
+    end)
+    btn:SetScript("OnDragStop", function(self)
+        local frame = self._dragFrame
+        if not frame then return end
+        self._dragFrame = nil
+        frame:StopMovingOrSizing()
+        local db = addon.db.combatTracker
+        for k, f in pairs(CT.frames) do
+            if f == frame then
+                local point, _, _, x, y = frame:GetPoint()
+                db.frames[k].point = point
+                db.frames[k].x     = math.floor(x + 0.5)
+                db.frames[k].y     = math.floor(y + 0.5)
+                break
+            end
+        end
+    end)
+
     return btn
 end
 
