@@ -136,6 +136,59 @@ end
 - Named globals get the `MathWroQOL_` prefix
 - Set `FrameStrata` and `FrameLevel` explicitly for overlay/dialog-level frames
 
+## Performance Rules
+
+These rules apply to every feature. Violating them causes frame drops, animation jitter, or CPU spikes that are hard to diagnose in-game.
+
+### No OnUpdate polling
+
+Never use `frame:SetScript("OnUpdate", ...)` to track cooldowns, check bag contents, or monitor state. Use events instead. The only permitted OnUpdate usage is for time-critical visual feedback that has no event equivalent (e.g. coordinate display during a drag — see `EditModeNudge.lua`).
+
+### Debounce high-frequency events
+
+`BAG_UPDATE` fires 50–100× during a single loot interaction. Any handler that scans bags or rebuilds UI must debounce using a pending flag + `C_Timer.After(0, ...)`:
+
+```lua
+local scanPending = false
+frame:SetScript("OnEvent", function(_, event)
+    if event == "BAG_UPDATE" then
+        if scanPending then return end
+        scanPending = true
+        C_Timer.After(0, function()
+            scanPending = false
+            RebuildIcons()  -- runs once per loot event, not 50×
+        end)
+    end
+end)
+```
+
+Other high-frequency events to treat the same way: `UNIT_AURA` (when monitoring many units).
+
+### Cooldown frames are self-managing
+
+`CooldownFrameTemplate` animates the swipe and countdown text internally — no OnUpdate or timer needed from the addon. Two rules:
+
+1. **Only call `CooldownFrame_Set()` / `SetCooldown()` when the cooldown state actually changes.** Calling it every `SPELL_UPDATE_COOLDOWN` unconditionally resets the swipe animation mid-cycle, causing visible jitter. Cache `(start, duration)` per button and skip the call if unchanged.
+2. **Call `Clear()` when the cooldown ends**, not just `SetCooldown(0, 0)`.
+
+```lua
+local function UpdateCooldown(button, start, duration)
+    if button._cdStart == start and button._cdDuration == duration then return end
+    button._cdStart, button._cdDuration = start, duration
+    if duration > 1.5 then
+        CooldownFrame_Set(button.cooldown, start, duration, true)
+    else
+        button.cooldown:Clear()
+    end
+end
+```
+
+### Event scope — register only what you need
+
+- Register events on a dedicated local frame, not on an existing feature frame that handles unrelated events.
+- Unregister events when a feature is disabled (call `frame:UnregisterAllEvents()` in `Apply()` when `enabled == false`, re-register when enabled).
+- `SPELL_UPDATE_COOLDOWN` and `BAG_UPDATE_COOLDOWN` are safe to handle synchronously — they fire at sensible rates and per-spell/item queries are cheap.
+
 ## WoW API Pitfalls
 
 - `GameMenuFrame` position resets every `OnShow` — re-apply from hook
