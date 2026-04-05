@@ -130,46 +130,137 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     return container
 end
 
--- ── Dropdown (UIDropDownMenu) ─────────────────────────────────────────────────
+-- ── Dropdown ──────────────────────────────────────────────────────────────────
 -- options: array of { label=string, value=any }
 -- getValue() returns current value; setValue(v) stores it.
 -- Returns a frame with .Refresh() to re-sync display from DB.
 local _dropdownCount = 0
 local function MakeDropdown(parent, options, getValue, setValue)
     _dropdownCount = _dropdownCount + 1
-    local dropdown = CreateFrame("Frame", "MathWroQOL_Dropdown" .. _dropdownCount, parent, "UIDropDownMenuTemplate")
-    UIDropDownMenu_SetWidth(dropdown, 120)
 
-    local function refresh()
-        local cur = getValue()
-        for _, opt in ipairs(options) do
-            if opt.value == cur then
-                UIDropDownMenu_SetText(dropdown, opt.label)
-                return
-            end
-        end
-        UIDropDownMenu_SetText(dropdown, options[1].label)
+    -- Button showing the currently selected option
+    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    btn:SetSize(130, 22)
+    btn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false, edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    btn:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+    btn:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+
+    local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    btnText:SetPoint("LEFT", 6, 0)
+    btnText:SetPoint("RIGHT", -18, 0)
+    btnText:SetJustifyH("LEFT")
+
+    local arrow = btn:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(12, 12)
+    arrow:SetPoint("RIGHT", -4, 0)
+    arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown")
+
+    -- Popup list (parented to UIParent so it floats above everything)
+    local popup = CreateFrame("Frame", "MathWroQOL_DropPopup" .. _dropdownCount, UIParent, "BackdropTemplate")
+    popup:SetFrameStrata("TOOLTIP")
+    popup:SetWidth(130)
+    popup:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false, edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    popup:SetBackdropColor(0.08, 0.08, 0.08, 0.97)
+    popup:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+    popup:Hide()
+
+    local ROW_H = 20
+    popup:SetHeight(#options * ROW_H + 4)
+
+    local rows = {}
+    for i, opt in ipairs(options) do
+        local row = CreateFrame("Button", nil, popup)
+        row:SetHeight(ROW_H)
+        row:SetPoint("TOPLEFT",  popup, "TOPLEFT",  2, -(i - 1) * ROW_H - 2)
+        row:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -2, -(i - 1) * ROW_H - 2)
+
+        local hl = row:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(1, 0.82, 0, 0.15)
+
+        local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        label:SetPoint("LEFT", 6, 0)
+        label:SetJustifyH("LEFT")
+        label:SetText(opt.label)
+        row.label = label
+
+        row:SetScript("OnClick", function()
+            setValue(opt.value)
+            btnText:SetText(opt.label)
+            addon:NotifyFeature("combatTracker")
+            popup:Hide()
+        end)
+
+        rows[i] = { frame = row, opt = opt }
     end
 
-    UIDropDownMenu_Initialize(dropdown, function(self, level)
-        local info = UIDropDownMenu_CreateInfo()
-        for _, opt in ipairs(options) do
-            info.text     = opt.label
-            info.value    = opt.value
-            info.checked  = (opt.value == getValue())
-            info.func     = function(btn)
-                setValue(btn.value)
-                UIDropDownMenu_SetSelectedValue(dropdown, btn.value)
-                refresh()
-                addon:NotifyFeature("combatTracker")
+    -- Highlight the active row in gold when popup opens
+    local function updateRowColors()
+        local cur = getValue()
+        for _, r in ipairs(rows) do
+            if r.opt.value == cur then
+                r.frame.label:SetTextColor(1, 0.82, 0, 1)
+            else
+                r.frame.label:SetTextColor(1, 1, 1, 1)
             end
-            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+
+    -- Click-outside-to-close: a full-screen transparent catcher frame
+    local catcher = CreateFrame("Frame", nil, UIParent)
+    catcher:SetAllPoints(UIParent)
+    catcher:SetFrameStrata("DIALOG")
+    catcher:SetFrameLevel(popup:GetFrameLevel() - 1)
+    catcher:EnableMouse(true)
+    catcher:Hide()
+    catcher:SetScript("OnMouseDown", function()
+        popup:Hide()
+    end)
+    popup:HookScript("OnShow", function() catcher:Show() end)
+    popup:HookScript("OnHide", function() catcher:Hide() end)
+
+    btn:SetScript("OnClick", function()
+        if popup:IsShown() then
+            popup:Hide()
+        else
+            popup:ClearAllPoints()
+            popup:SetPoint("TOPLEFT", btn, "BOTTOMLEFT", 0, -2)
+            updateRowColors()
+            popup:Show()
         end
     end)
 
+    btn:HookScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(0.8, 0.8, 0.8, 1)
+    end)
+    btn:HookScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+    end)
+
+    local function refresh()
+        local cur = getValue()
+        for _, r in ipairs(rows) do
+            if r.opt.value == cur then
+                btnText:SetText(r.opt.label)
+                return
+            end
+        end
+        if options[1] then btnText:SetText(options[1].label) end
+    end
+
     refresh()
-    dropdown.Refresh = refresh
-    return dropdown
+    btn.Refresh = refresh
+    return btn
 end
 
 -- ── Parent panel (title only) ─────────────────────────────────────────────────
@@ -760,7 +851,7 @@ local function BuildCombatTrackerPanel()
             function() return addon.db.combatTracker.frames[key].layout end,
             function(val) addon.db.combatTracker.frames[key].layout = val end
         )
-        layoutBtn:SetPoint("LEFT", layoutLabel, "RIGHT", -16, 0)
+        layoutBtn:SetPoint("LEFT", layoutLabel, "RIGHT", 8, 0)
         table.insert(refreshFns, function() layoutBtn:Refresh() end)
 
         local gridColsLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -775,7 +866,7 @@ local function BuildCombatTrackerPanel()
             function() return addon.db.combatTracker.frames[key].gridCols end,
             function(val) addon.db.combatTracker.frames[key].gridCols = val end
         )
-        colsBtn:SetPoint("LEFT", gridColsLabel, "RIGHT", -16, 0)
+        colsBtn:SetPoint("LEFT", gridColsLabel, "RIGHT", 8, 0)
         table.insert(refreshFns, function() colsBtn:Refresh() end)
 
         local widthSlider = MakeSliderWithInput(sc, "Icon Width (px)", 16, 80,
@@ -820,7 +911,7 @@ local function BuildCombatTrackerPanel()
                 addon:NotifyFeature("combatTracker")
             end
         )
-        mergeBtn:SetPoint("LEFT", mergeLabel, "RIGHT", -16, 0)
+        mergeBtn:SetPoint("LEFT", mergeLabel, "RIGHT", 8, 0)
         table.insert(refreshFns, function() mergeBtn:Refresh() end)
 
         local lastWidget = mergeLabel
