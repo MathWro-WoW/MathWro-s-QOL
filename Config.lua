@@ -980,7 +980,9 @@ local function BuildCombatTrackerPanel()
     -- ── Refresh all controls on panel show ────────────────────────────────────
 
     panel:HookScript("OnShow", function()
-        for _, fn in ipairs(refreshFns) do fn() end
+        C_Timer.After(0, function()
+            for _, fn in ipairs(refreshFns) do fn() end
+        end)
     end)
 
     return panel
