@@ -197,9 +197,13 @@ function consumables:UpdateCooldowns()
         if btn:IsShown() and btn._itemID then
             local start, duration
             if btn._category == "healthstone" then
-                start, duration = GetSpellCooldown(HEALTHSTONE_CD_SPELL)
+                local info = C_Spell.GetSpellCooldown(HEALTHSTONE_CD_SPELL)
+                start    = info and info.startTime or 0
+                duration = info and info.duration  or 0
             else
-                start, duration = GetItemCooldown(btn._itemID)
+                local info = C_Item.GetItemCooldown(btn._itemID)
+                start    = info and info.startTime or 0
+                duration = info and info.duration  or 0
             end
             CT.UpdateButtonCooldown(btn, start, duration)
         end

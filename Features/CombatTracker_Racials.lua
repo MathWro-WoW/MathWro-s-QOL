@@ -149,7 +149,9 @@ end
 function racials:UpdateCooldowns()
     for _, btn in ipairs(self.buttons) do
         if btn:IsShown() and btn._spellID then
-            local start, duration = GetSpellCooldown(btn._spellID)
+            local info = C_Spell.GetSpellCooldown(btn._spellID)
+            local start    = info and info.startTime or 0
+            local duration = info and info.duration  or 0
             CT.UpdateButtonCooldown(btn, start, duration)
         end
     end
