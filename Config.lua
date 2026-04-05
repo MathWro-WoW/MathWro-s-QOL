@@ -835,7 +835,7 @@ local function BuildCombatTrackerPanel()
 
         local entries = addon.combatTracker
             and addon.combatTracker.sections.racials
-            and addon.combatTracker.sections.racials._racialEntries
+            and addon.combatTracker.sections.racials._allRacialNames
             or {}
 
         local totalHeight = 0

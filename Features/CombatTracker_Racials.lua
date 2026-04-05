@@ -160,6 +160,21 @@ end
 -- Registers events on a private frame
 function racials:Initialize()
     local self = self  -- upvalue for closures
+
+    -- Populate _allRacialNames from static data (no IsSpellKnown check needed).
+    -- This is used by the Config panel so toggles appear immediately on panel open,
+    -- even before RebuildIcons() has run (where IsSpellKnown may return false at login).
+    local _, raceKey = UnitRace("player")
+    local spellList  = RACIAL_DATA[raceKey] or {}
+    local seenNames  = {}
+    self._allRacialNames = {}
+    for _, entry in ipairs(spellList) do
+        if not seenNames[entry.name] then
+            seenNames[entry.name] = true
+            table.insert(self._allRacialNames, { name = entry.name })
+        end
+    end
+
     self.eventFrame = CreateFrame("Frame")
     self.eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
     self.eventFrame:RegisterEvent("UNIT_ENTERED_VEHICLE")
