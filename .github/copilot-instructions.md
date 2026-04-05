@@ -88,8 +88,18 @@ The options UI has its own layout conventions:
 
 - Use `MakeSeparator()` between sections.
 - Use `MakeCheckbox()` for checkboxes.
+- Use `MakeOptionRow(parent, labelText, controlFn)` for label-left / control-right rows (dropdowns, font pickers).
+- Use `MakeCollapsibleSection(parent, title, isExpanded)` for expandable section groups.
+- Use `MakeCard(parent, anchor, title, description)` for top-level setting cards; returns `card, content`.
 - Call `ClearAllPoints()` before repositioning reused widgets.
 - Any `FontString` that can wrap should explicitly set `SetWidth()` and `SetJustifyH("LEFT")`.
+
+Config.lua has several layout pitfalls:
+
+- A bare `Texture` with two anchor points on different edges (e.g. `TOPLEFT` + `RIGHT`) will not reliably return `GetBottom()` during initial layout — WoW defers resolution and `GetBottom()` returns nil. This breaks any code that reads bounds (like `SetBottomWidget`). Wrap in a 1px-height Frame instead; Frames resolve deferred anchors correctly.
+- `MakeSeparator` is a Frame wrapping a texture (not a bare texture) for the reason above. It uses `TOPLEFT` (anchored to the previous widget) + `RIGHT` (anchored to parent) so its width adapts to the container.
+- The content frame inside `MakeCard` must not set both `TOPLEFT` and `TOPRIGHT` with different Y offsets — WoW averages mismatched Y values on same-edge anchors, pushing the content behind the card header. Use `TOPLEFT` for position + `RIGHT` for width constraint.
+- `MakeCollapsibleSection` arrows use `Soulbinds_Collection_CategoryHeader_Expand` / `Collapse` atlas textures, not Unicode characters (WoW's default fonts lack `▸`/`▾`).
 
 Some features intentionally register event frames at file top level instead of inside `Initialize()`. Follow that pattern when a frame must exist before a load-on-demand Blizzard UI or early zone event fires. `AuctionFilter.lua` and `CombatLog.lua` are the reference examples.
 

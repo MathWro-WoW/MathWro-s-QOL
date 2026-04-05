@@ -5,15 +5,154 @@ local function ElvSkin()
     return ElvUI[1]:GetModule("Skins")
 end
 
--- ── Widget helpers ────────────────────────────────────────────────────────────
+local function ApplyFrameBackdrop(frame, useFadeColor)
+    frame:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile     = false,
+        edgeSize = 1,
+        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+
+    frame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+    frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+
+    if ElvUI then
+        local E = ElvUI[1]
+        if useFadeColor then
+            frame:SetBackdropColor(unpack(E.media.backdropfadecolor))
+        else
+            frame:SetBackdropColor(unpack(E.media.backdropcolor))
+        end
+        frame:SetBackdropBorderColor(unpack(E.media.bordercolor))
+    end
+end
+
+local function SetChildrenEnabled(container, enabled)
+    if not container then return end
+
+    local alpha = enabled and 1.0 or 0.4
+
+    local function applyToWidget(widget)
+        if not widget then return end
+
+        widget:SetAlpha(alpha)
+
+        if widget.IsObjectType and widget:IsObjectType("CheckButton") then
+            if enabled then widget:Enable() else widget:Disable() end
+        elseif widget.IsObjectType and widget:IsObjectType("Button") then
+            if enabled then widget:Enable() else widget:Disable() end
+        elseif widget.IsObjectType and widget:IsObjectType("EditBox") then
+            if enabled then widget:SetEnabled(true) else widget:SetEnabled(false) end
+        elseif widget.IsObjectType and widget:IsObjectType("Slider") then
+            if enabled then widget:Enable() else widget:Disable() end
+        else
+            widget:EnableMouse(enabled)
+        end
+
+        for _, region in ipairs({ widget:GetRegions() }) do
+            if region.SetAlpha then
+                region:SetAlpha(alpha)
+            end
+        end
+
+        for _, child in ipairs({ widget:GetChildren() }) do
+            applyToWidget(child)
+        end
+    end
+
+    for _, child in ipairs({ container:GetChildren() }) do
+        applyToWidget(child)
+    end
+
+    for _, region in ipairs({ container:GetRegions() }) do
+        if region.SetAlpha then
+            region:SetAlpha(alpha)
+        end
+    end
+end
+
+local function MakePanelScaffold(panel, titleText, scrollName)
+    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText(titleText)
+
+    local bg = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+    bg:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -6, -8)
+    bg:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -6, 6)
+    ApplyFrameBackdrop(bg, true)
+
+    local scrollFrame = CreateFrame("ScrollFrame", scrollName, bg, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", bg, "TOPLEFT", 8, -8)
+    scrollFrame:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", -28, 8)
+    scrollFrame:EnableMouseWheel(true)
+    scrollFrame:SetScript("OnMouseWheel", function(self, delta)
+        local cur = self:GetVerticalScroll()
+        local max = self:GetVerticalScrollRange()
+        self:SetVerticalScroll(math.max(0, math.min(max, cur - delta * 20)))
+    end)
+
+    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(530, 2600)
+    scrollFrame:SetScrollChild(scrollChild)
+
+    return scrollChild
+end
+
+local function MakeCard(parent, anchor, title, description)
+    local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    card:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -12)
+    card:SetSize(500, 200)
+    ApplyFrameBackdrop(card, true)
+
+    local header = card:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    header:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -8)
+    header:SetText(title)
+    header:SetTextColor(1, 0.82, 0, 1)
+
+    local desc = card:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    desc:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)
+    desc:SetWidth(484)
+    desc:SetJustifyH("LEFT")
+    desc:SetText(description)
+
+    local content = CreateFrame("Frame", nil, card)
+    content:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -8)
+    content:SetPoint("RIGHT", card, "RIGHT", -8, 0)
+    content:SetHeight(1)  -- initial; SetBottomWidget recalculates
+
+    function card:SetBottomWidget(widget, bottomPadding)
+        bottomPadding = bottomPadding or 8
+
+        local function applyHeight()
+            if not widget or not content:GetTop() or not widget:GetBottom() then return end
+            local contentHeight = math.max(10, (content:GetTop() - widget:GetBottom()) + bottomPadding)
+            content:SetHeight(contentHeight)
+
+            if card:GetTop() and (widget:GetBottom() or 0) then
+                local h = math.max(60, (card:GetTop() - widget:GetBottom()) + bottomPadding)
+                card:SetHeight(h)
+            end
+        end
+
+        applyHeight()
+        C_Timer.After(0, applyHeight)
+    end
+
+    return card, content
+end
 
 local function MakeSeparator(parent, anchor, offsetY)
-    local line = parent:CreateTexture(nil, "ARTWORK")
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetHeight(1)
+    holder:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, offsetY)
+    holder:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
+
+    local line = holder:CreateTexture(nil, "ARTWORK")
     line:SetColorTexture(0.3, 0.3, 0.3, 0.8)
-    line:SetHeight(1)
-    line:SetWidth(550)
-    line:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, offsetY)
-    return line
+    line:SetAllPoints(holder)
+
+    return holder
 end
 
 local function MakeCheckbox(parent, label, x, y, getValue, setValue)
@@ -29,9 +168,6 @@ local function MakeCheckbox(parent, label, x, y, getValue, setValue)
     return cb
 end
 
--- ── Slider + editable number input ────────────────────────────────────────────
--- Returns a container frame with .Refresh() to sync from DB.
--- minVal/maxVal are integers. setVal(n) is called on every change.
 local _sliderCount = 0
 local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal)
     _sliderCount = _sliderCount + 1
@@ -55,30 +191,16 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     _G[sliderName .. "High"]:SetText(tostring(maxVal))
     _G[sliderName .. "Text"]:SetText("")
 
-    -- Display: clickable FontString (always renders). Click → shows EditBox.
     local displayBtn = CreateFrame("Button", nil, container, "BackdropTemplate")
     displayBtn:SetSize(40, 20)
     displayBtn:SetPoint("LEFT", slider, "RIGHT", 10, 0)
-    displayBtn:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false, edgeSize = 1,
-        insets = { left=1, right=1, top=1, bottom=1 },
-    })
-    displayBtn:SetBackdropColor(0, 0, 0, 0.5)
+    ApplyFrameBackdrop(displayBtn, false)
     displayBtn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-    if ElvUI then
-        local E = ElvUI[1]
-        displayBtn:SetBackdropColor(unpack(E.media.backdropcolor))
-        displayBtn:SetBackdropBorderColor(unpack(E.media.bordercolor))
-    end
 
     local valueLabel = displayBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     valueLabel:SetAllPoints()
     valueLabel:SetJustifyH("CENTER")
 
-    -- Edit: EditBox shown only while user types; hidden otherwise.
-    -- Focused EditBoxes always paint their text, avoiding the repaint bug.
     local input = CreateFrame("EditBox", nil, container, "BackdropTemplate")
     input:SetFontObject(GameFontHighlightSmall)
     input:SetJustifyH("CENTER")
@@ -86,13 +208,7 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     input:SetPoint("LEFT", slider, "RIGHT", 10, 0)
     input:SetAutoFocus(false)
     input:SetMaxLetters(3)
-    input:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false, edgeSize = 1,
-        insets = { left=1, right=1, top=1, bottom=1 },
-    })
-    input:SetBackdropColor(0, 0, 0, 0.5)
+    ApplyFrameBackdrop(input, false)
     input:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
     input:Hide()
 
@@ -144,30 +260,17 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     return container
 end
 
--- ── Dropdown ──────────────────────────────────────────────────────────────────
--- options: array of { label=string, value=any }
--- getValue() returns current value; setValue(v) stores it.
--- Returns a frame with .Refresh() to re-sync display from DB.
 local _openDropdownPopups = {}
 local _dropdownCount = 0
 local function MakeDropdown(parent, options, getValue, setValue)
     _dropdownCount = _dropdownCount + 1
 
-    -- Button showing the currently selected option
     local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
     btn:SetSize(130, 22)
-    btn:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false, edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    btn:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+    ApplyFrameBackdrop(btn, false)
     btn:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
     if ElvUI then
-        local E = ElvUI[1]
-        btn:SetBackdropColor(unpack(E.media.backdropcolor))
-        btn:SetBackdropBorderColor(unpack(E.media.bordercolor))
+        btn:SetBackdropBorderColor(unpack(ElvUI[1].media.bordercolor))
     end
 
     local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -179,27 +282,18 @@ local function MakeDropdown(parent, options, getValue, setValue)
     arrow:SetSize(16, 16)
     arrow:SetPoint("RIGHT", -3, 0)
     arrow:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
-    arrow:SetTexCoord(0, 1, 0, 0.5)  -- bottom half = down arrow
+    arrow:SetTexCoord(0, 1, 0, 0.5)
     arrow:SetVertexColor(1, 0.82, 0, 1)
     btn.arrow = arrow
 
-    -- Popup list (parented to UIParent so it floats above everything)
     local popup = CreateFrame("Frame", "MathWroQOL_DropPopup" .. _dropdownCount, UIParent, "BackdropTemplate")
     table.insert(_openDropdownPopups, popup)
     popup:SetFrameStrata("TOOLTIP")
     popup:SetWidth(130)
-    popup:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false, edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    popup:SetBackdropColor(0.08, 0.08, 0.08, 0.97)
+    ApplyFrameBackdrop(popup, false)
     popup:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
     if ElvUI then
-        local E = ElvUI[1]
-        popup:SetBackdropColor(unpack(E.media.backdropcolor))
-        popup:SetBackdropBorderColor(unpack(E.media.bordercolor))
+        popup:SetBackdropBorderColor(unpack(ElvUI[1].media.bordercolor))
     end
     popup:Hide()
 
@@ -210,7 +304,7 @@ local function MakeDropdown(parent, options, getValue, setValue)
     for i, opt in ipairs(options) do
         local row = CreateFrame("Button", nil, popup)
         row:SetHeight(ROW_H)
-        row:SetPoint("TOPLEFT",  popup, "TOPLEFT",  2, -(i - 1) * ROW_H - 2)
+        row:SetPoint("TOPLEFT", popup, "TOPLEFT", 2, -(i - 1) * ROW_H - 2)
         row:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -2, -(i - 1) * ROW_H - 2)
 
         local hl = row:CreateTexture(nil, "HIGHLIGHT")
@@ -233,7 +327,6 @@ local function MakeDropdown(parent, options, getValue, setValue)
         rows[i] = { frame = row, opt = opt }
     end
 
-    -- Highlight the active row in gold when popup opens
     local function updateRowColors()
         local cur = getValue()
         for _, r in ipairs(rows) do
@@ -245,7 +338,6 @@ local function MakeDropdown(parent, options, getValue, setValue)
         end
     end
 
-    -- Click-outside-to-close: a full-screen transparent catcher frame
     local catcher = CreateFrame("Frame", nil, UIParent)
     catcher:SetAllPoints(UIParent)
     catcher:SetFrameStrata("DIALOG")
@@ -255,13 +347,14 @@ local function MakeDropdown(parent, options, getValue, setValue)
     catcher:SetScript("OnMouseDown", function()
         popup:Hide()
     end)
+
     popup:HookScript("OnShow", function(self)
         for _, p in ipairs(_openDropdownPopups) do
             if p ~= self and p:IsShown() then p:Hide() end
         end
     end)
-    popup:HookScript("OnShow", function() catcher:Show(); arrow:SetTexCoord(0, 1, 0.5, 1) end)  -- up arrow
-    popup:HookScript("OnHide", function() catcher:Hide(); arrow:SetTexCoord(0, 1, 0, 0.5) end)  -- down arrow
+    popup:HookScript("OnShow", function() catcher:Show(); arrow:SetTexCoord(0, 1, 0.5, 1) end)
+    popup:HookScript("OnHide", function() catcher:Hide(); arrow:SetTexCoord(0, 1, 0, 0.5) end)
 
     btn:SetScript("OnClick", function()
         if popup:IsShown() then
@@ -278,7 +371,11 @@ local function MakeDropdown(parent, options, getValue, setValue)
         self:SetBackdropBorderColor(0.8, 0.8, 0.8, 1)
     end)
     btn:HookScript("OnLeave", function(self)
-        self:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+        if ElvUI then
+            self:SetBackdropBorderColor(unpack(ElvUI[1].media.bordercolor))
+        else
+            self:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+        end
     end)
 
     local function refresh()
@@ -297,7 +394,79 @@ local function MakeDropdown(parent, options, getValue, setValue)
     return btn
 end
 
--- ── Parent panel (title only) ─────────────────────────────────────────────────
+local function MakeCollapsibleSection(parent, title, isExpanded)
+    local HEADER_H = 24
+
+    local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    section:SetWidth(500)
+    ApplyFrameBackdrop(section, true)
+
+    local header = CreateFrame("Button", nil, section)
+    header:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
+    header:SetPoint("TOPRIGHT", section, "TOPRIGHT", 0, 0)
+    header:SetHeight(HEADER_H)
+
+    local hover = header:CreateTexture(nil, "HIGHLIGHT")
+    hover:SetAllPoints()
+    hover:SetColorTexture(1, 0.82, 0, 0.08)
+
+    local arrow = header:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(16, 16)
+    arrow:SetPoint("LEFT", 6, 0)
+
+    local label = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label:SetPoint("LEFT", arrow, "RIGHT", 4, 0)
+    label:SetTextColor(1, 0.82, 0, 1)
+    label:SetText(title)
+
+    local content = CreateFrame("Frame", nil, section)
+    content:SetPoint("TOPLEFT", section, "TOPLEFT", 8, -(HEADER_H + 6))
+    content:SetPoint("TOPRIGHT", section, "TOPRIGHT", -8, -(HEADER_H + 6))
+    content:SetHeight(1)
+
+    section.content = content
+    section.header = header
+    section._expanded = isExpanded == true
+    section._contentBottomWidget = nil
+    section._contentBottomPadding = 8
+    section._contentHeight = 1
+
+    function section:UpdateLayout()
+        if self._expanded and self._contentBottomWidget and content:GetTop() and self._contentBottomWidget:GetBottom() then
+            self._contentHeight = math.max(10, (content:GetTop() - self._contentBottomWidget:GetBottom()) + self._contentBottomPadding)
+        end
+
+        if self._expanded then
+            content:Show()
+            content:SetHeight(self._contentHeight)
+            self:SetHeight(HEADER_H + self._contentHeight + 12)
+            arrow:SetAtlas("Soulbinds_Collection_CategoryHeader_Collapse", false)
+        else
+            content:Hide()
+            self:SetHeight(HEADER_H + 4)
+            arrow:SetAtlas("Soulbinds_Collection_CategoryHeader_Expand", false)
+        end
+    end
+
+    function section:SetContentBottom(widget, padding)
+        self._contentBottomWidget = widget
+        self._contentBottomPadding = padding or 8
+        self:UpdateLayout()
+        C_Timer.After(0, function() self:UpdateLayout() end)
+    end
+
+    function section:SetExpanded(expanded)
+        self._expanded = expanded == true
+        self:UpdateLayout()
+    end
+
+    header:SetScript("OnClick", function()
+        section:SetExpanded(not section._expanded)
+    end)
+
+    section:SetExpanded(isExpanded == true)
+    return section
+end
 
 local function BuildParentPanel()
     local panel = CreateFrame("Frame")
@@ -314,88 +483,45 @@ local function BuildParentPanel()
     return panel
 end
 
--- ── General subpage ───────────────────────────────────────────────────────────
-
 local function BuildGeneralPanel()
     local panel = CreateFrame("Frame")
     panel.name = "General"
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("General")
+    local sc = MakePanelScaffold(panel, "General", "MathWroQOL_GeneralScroll")
 
-    -- Dark backdrop below the title
-    local bg = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    bg:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -6, -8)
-    bg:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -6, 6)
-    bg:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile     = false,
-        edgeSize = 1,
-        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    bg:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-    bg:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-    if ElvUI then
-        local E = ElvUI[1]
-        bg:SetBackdropColor(unpack(E.media.backdropfadecolor))
-        bg:SetBackdropBorderColor(unpack(E.media.bordercolor))
-    end
+    local rootAnchor = CreateFrame("Frame", nil, sc)
+    rootAnchor:SetSize(1, 1)
+    rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
 
-    local scrollFrame = CreateFrame("ScrollFrame", "MathWroQOL_GeneralScroll", bg, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT",     bg, "TOPLEFT",     8,   -8)
-    scrollFrame:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", -28,  8)
-    scrollFrame:EnableMouseWheel(true)
-    scrollFrame:SetScript("OnMouseWheel", function(self, delta)
-        local cur = self:GetVerticalScroll()
-        local max = self:GetVerticalScrollRange()
-        self:SetVerticalScroll(math.max(0, math.min(max, cur - delta * 20)))
-    end)
+    local gameMenuCard, gameMenuContent = MakeCard(
+        sc,
+        rootAnchor,
+        "Game Menu",
+        "Customize the Escape menu appearance and behavior."
+    )
 
-    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(530, 900)
-    scrollFrame:SetScrollChild(scrollChild)
-
-    -- ── Game Menu Scale ───────────────────────────────────────────────────────
-
-    local gmLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    gmLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 8, -12)
-    gmLabel:SetText("Game Menu Scale")
-
-    local gmDesc = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    gmDesc:SetPoint("TOPLEFT", gmLabel, "BOTTOMLEFT", 0, -4)
-    gmDesc:SetText("Scale the Escape menu. Default is 1.0.")
-
-    local slider = CreateFrame("Slider", "MathWroQOL_GameMenuSlider", scrollChild, "OptionsSliderTemplate")
-    slider:SetPoint("TOPLEFT", gmDesc, "BOTTOMLEFT", 0, -16)
-    slider:SetMinMaxValues(0.5, 2.0)
-    slider:SetValueStep(0.05)
-    slider:SetObeyStepOnDrag(true)
-    slider:SetWidth(200)
-    _G[slider:GetName().."Low"]:SetText("0.5x")
-    _G[slider:GetName().."High"]:SetText("2.0x")
-    _G[slider:GetName().."Text"]:SetText("Scale: 1.0x")
+    local gmSlider = CreateFrame("Slider", "MathWroQOL_GameMenuSlider", gameMenuContent, "OptionsSliderTemplate")
+    gmSlider:SetPoint("TOPLEFT", gameMenuContent, "TOPLEFT", 16, -2)
+    gmSlider:SetMinMaxValues(0.5, 2.0)
+    gmSlider:SetValueStep(0.05)
+    gmSlider:SetObeyStepOnDrag(true)
+    gmSlider:SetWidth(220)
+    _G[gmSlider:GetName() .. "Low"]:SetText("0.5x")
+    _G[gmSlider:GetName() .. "High"]:SetText("2.0x")
+    _G[gmSlider:GetName() .. "Text"]:SetText("Scale: 1.0x")
 
     local S = ElvSkin()
-    if S then S:HandleSliderFrame(slider) end
+    if S then S:HandleSliderFrame(gmSlider) end
 
-    slider:SetScript("OnValueChanged", function(self, value, userInput)
-        _G[self:GetName().."Text"]:SetText(string.format("Scale: %.2fx", value))
+    gmSlider:SetScript("OnValueChanged", function(self, value, userInput)
+        _G[self:GetName() .. "Text"]:SetText(string.format("Scale: %.2fx", value))
         if not userInput then return end
         if not addon.db.gameMenu then addon.db.gameMenu = {} end
         addon.db.gameMenu.scale = value
         addon:NotifyFeature("gameMenu")
     end)
 
-    panel:HookScript("OnShow", function()
-        local scale = (addon.db.gameMenu and addon.db.gameMenu.scale) or 1.0
-        slider:SetValue(scale)
-    end)
-
-    -- ── Game Menu Dragging ────────────────────────────────────────────────────
-
-    local moveableCB = MakeCheckbox(scrollChild, "Allow dragging", 0, 0,
+    local dragCB = MakeCheckbox(gameMenuContent, "Allow dragging", 0, 0,
         function() return addon.db.gameMenu and addon.db.gameMenu.moveable == true end,
         function(val)
             if not addon.db.gameMenu then addon.db.gameMenu = {} end
@@ -403,13 +529,18 @@ local function BuildGeneralPanel()
             addon:NotifyFeature("gameMenu")
         end
     )
-    moveableCB:ClearAllPoints()
-    moveableCB:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -16)
+    dragCB:ClearAllPoints()
+    dragCB:SetPoint("TOPLEFT", gmSlider, "BOTTOMLEFT", -4, -12)
 
-    local resetBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+    local resetContainer = CreateFrame("Frame", nil, gameMenuContent)
+    resetContainer:SetPoint("TOPLEFT", dragCB, "BOTTOMLEFT", 20, -6)
+    resetContainer:SetSize(160, 24)
+
+    local resetBtn = CreateFrame("Button", nil, resetContainer, "UIPanelButtonTemplate")
     resetBtn:SetSize(120, 22)
-    resetBtn:SetPoint("TOPLEFT", moveableCB, "BOTTOMLEFT", 0, -8)
+    resetBtn:SetPoint("TOPLEFT", resetContainer, "TOPLEFT", 0, 0)
     resetBtn:SetText("Reset Position")
+    if S then S:HandleButton(resetBtn) end
     resetBtn:SetScript("OnClick", function()
         for _, f in ipairs(addon.features) do
             if f.name == "gameMenu" and f.ResetPosition then
@@ -419,19 +550,21 @@ local function BuildGeneralPanel()
         end
     end)
 
-    -- ── CDM Button ────────────────────────────────────────────────────────────
+    local function updateDragGatekeeper()
+        SetChildrenEnabled(resetContainer, addon.db.gameMenu and addon.db.gameMenu.moveable == true)
+    end
+    dragCB:HookScript("OnClick", updateDragGatekeeper)
 
-    local cdmSep = MakeSeparator(scrollChild, resetBtn, -12)
+    gameMenuCard:SetBottomWidget(resetContainer, 10)
 
-    local cdmLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    cdmLabel:SetPoint("TOPLEFT", cdmSep, "BOTTOMLEFT", 0, -10)
-    cdmLabel:SetText("CDM Button")
+    local cdmCard, cdmContent = MakeCard(
+        sc,
+        gameMenuCard,
+        "CDM Button",
+        "Adds a CDM button to the Game Menu that opens the Cooldown Manager."
+    )
 
-    local cdmDesc = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    cdmDesc:SetPoint("TOPLEFT", cdmLabel, "BOTTOMLEFT", 0, -4)
-    cdmDesc:SetText("Adds a CDM button to the Game Menu that opens the Cooldown Manager.")
-
-    local cdmEnabledCB = MakeCheckbox(scrollChild, "Show CDM button in game menu", 0, 0,
+    local cdmEnableCB = MakeCheckbox(cdmContent, "Show CDM button in game menu", 0, 0,
         function() return addon.db.cdmButton and addon.db.cdmButton.enabled end,
         function(val)
             if not addon.db.cdmButton then addon.db.cdmButton = {} end
@@ -439,14 +572,18 @@ local function BuildGeneralPanel()
             addon:NotifyFeature("cdmButton")
         end
     )
-    cdmEnabledCB:ClearAllPoints()
-    cdmEnabledCB:SetPoint("TOPLEFT", cdmDesc, "BOTTOMLEFT", 0, -8)
+    cdmEnableCB:ClearAllPoints()
+    cdmEnableCB:SetPoint("TOPLEFT", cdmContent, "TOPLEFT", 12, -2)
 
-    local slashNote = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    slashNote:SetPoint("TOPLEFT", cdmEnabledCB, "BOTTOMLEFT", 0, -8)
-    slashNote:SetText("Slash commands:")
+    local slashContainer = CreateFrame("Frame", nil, cdmContent)
+    slashContainer:SetPoint("TOPLEFT", cdmEnableCB, "BOTTOMLEFT", 20, -6)
+    slashContainer:SetSize(430, 110)
 
-    local waCB = MakeCheckbox(scrollChild, "Enable /wa command", 0, 0,
+    local slashLabel = slashContainer:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    slashLabel:SetPoint("TOPLEFT", slashContainer, "TOPLEFT", 0, 0)
+    slashLabel:SetText("Slash commands:")
+
+    local waCB = MakeCheckbox(slashContainer, "Enable /wa command", 0, 0,
         function() return addon.db.cdmButton and addon.db.cdmButton.slashWA end,
         function(val)
             if not addon.db.cdmButton then addon.db.cdmButton = {} end
@@ -454,9 +591,9 @@ local function BuildGeneralPanel()
         end
     )
     waCB:ClearAllPoints()
-    waCB:SetPoint("TOPLEFT", slashNote, "BOTTOMLEFT", 0, -8)
+    waCB:SetPoint("TOPLEFT", slashLabel, "BOTTOMLEFT", -4, -4)
 
-    local cmCB = MakeCheckbox(scrollChild, "Enable /cm command", 0, 0,
+    local cmCB = MakeCheckbox(slashContainer, "Enable /cm command", 0, 0,
         function() return addon.db.cdmButton and addon.db.cdmButton.slashCM end,
         function(val)
             if not addon.db.cdmButton then addon.db.cdmButton = {} end
@@ -466,19 +603,21 @@ local function BuildGeneralPanel()
     cmCB:ClearAllPoints()
     cmCB:SetPoint("TOPLEFT", waCB, "BOTTOMLEFT", 0, -4)
 
-    -- ── Auction House Filters ─────────────────────────────────────────────────
+    local function updateCDMGatekeeper()
+        SetChildrenEnabled(slashContainer, addon.db.cdmButton and addon.db.cdmButton.enabled == true)
+    end
+    cdmEnableCB:HookScript("OnClick", updateCDMGatekeeper)
 
-    local ahSep = MakeSeparator(scrollChild, cmCB, -12)
+    cdmCard:SetBottomWidget(slashContainer, 10)
 
-    local ahLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    ahLabel:SetPoint("TOPLEFT", ahSep, "BOTTOMLEFT", 0, -10)
-    ahLabel:SetText("Auction House Filters")
+    local auctionCard, auctionContent = MakeCard(
+        sc,
+        cdmCard,
+        "Auction House Filters",
+        "Automatically enable selected filters each time you open the Auction House."
+    )
 
-    local ahDesc = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    ahDesc:SetPoint("TOPLEFT", ahLabel, "BOTTOMLEFT", 0, -4)
-    ahDesc:SetText("Automatically enable selected filters each time you open the Auction House.")
-
-    local ahExpCB = MakeCheckbox(scrollChild, "Auto-enable 'Current expansion only' filter", 0, 0,
+    local ahExpCB = MakeCheckbox(auctionContent, "Auto-enable 'Current expansion only' filter", 0, 0,
         function() return addon.db.auctionFilter and addon.db.auctionFilter.currentExpansionOnly end,
         function(val)
             if not addon.db.auctionFilter then addon.db.auctionFilter = {} end
@@ -487,9 +626,9 @@ local function BuildGeneralPanel()
         end
     )
     ahExpCB:ClearAllPoints()
-    ahExpCB:SetPoint("TOPLEFT", ahDesc, "BOTTOMLEFT", 0, -8)
+    ahExpCB:SetPoint("TOPLEFT", auctionContent, "TOPLEFT", 12, -2)
 
-    local ahUsableCB = MakeCheckbox(scrollChild, "Auto-enable 'Usable only' filter", 0, 0,
+    local ahUsableCB = MakeCheckbox(auctionContent, "Auto-enable 'Usable only' filter", 0, 0,
         function() return addon.db.auctionFilter and addon.db.auctionFilter.usableOnly end,
         function(val)
             if not addon.db.auctionFilter then addon.db.auctionFilter = {} end
@@ -500,25 +639,36 @@ local function BuildGeneralPanel()
     ahUsableCB:ClearAllPoints()
     ahUsableCB:SetPoint("TOPLEFT", ahExpCB, "BOTTOMLEFT", 0, -4)
 
-    -- ── Combat Logging ────────────────────────────────────────────────────────
+    auctionCard:SetBottomWidget(ahUsableCB, 10)
 
-    local clSep = MakeSeparator(scrollChild, ahUsableCB, -12)
+    panel:HookScript("OnShow", function()
+        local scale = (addon.db.gameMenu and addon.db.gameMenu.scale) or 1.0
+        gmSlider:SetValue(scale)
+        updateDragGatekeeper()
+        updateCDMGatekeeper()
+    end)
 
-    local clLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    clLabel:SetPoint("TOPLEFT", clSep, "BOTTOMLEFT", 0, -10)
-    clLabel:SetText("Combat Logging")
+    return panel
+end
 
-    local clDesc = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    clDesc:SetPoint("TOPLEFT", clLabel, "BOTTOMLEFT", 0, -4)
-    clDesc:SetWidth(500)
-    clDesc:SetJustifyH("LEFT")
-    clDesc:SetText("Automatically start combat logging when entering selected instance types. Stops on exit. If you manually stop logging mid-instance, it stays off until the next instance.")
+local function BuildCombatLogPanel()
+    local panel = CreateFrame("Frame")
+    panel.name = "Combat Logging"
 
-    -- No NotifyFeature call needed: CombatLog:Apply() is a no-op; settings
-    -- take effect on the next zone transition (PLAYER_ENTERING_WORLD / ZONE_CHANGED_NEW_AREA).
+    local sc = MakePanelScaffold(panel, "Combat Logging", "MathWroQOL_CombatLogScroll")
 
-    -- Row 1: Dungeon | Raid
-    local clDungeonCB = MakeCheckbox(scrollChild, "Dungeon (includes Mythic+)", 0, 0,
+    local rootAnchor = CreateFrame("Frame", nil, sc)
+    rootAnchor:SetSize(1, 1)
+    rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
+
+    local card, content = MakeCard(
+        sc,
+        rootAnchor,
+        "Combat Logging",
+        "Automatically start combat logging when entering selected instance types. Stops on exit. If you manually stop logging mid-instance, it stays off until the next instance."
+    )
+
+    local clDungeonCB = MakeCheckbox(content, "Dungeon (includes Mythic+)", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.dungeon end,
         function(val)
             if not addon.db.combatLog then addon.db.combatLog = {} end
@@ -526,9 +676,9 @@ local function BuildGeneralPanel()
         end
     )
     clDungeonCB:ClearAllPoints()
-    clDungeonCB:SetPoint("TOPLEFT", clDesc, "BOTTOMLEFT", 0, -8)
+    clDungeonCB:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
 
-    local clRaidCB = MakeCheckbox(scrollChild, "Raid", 0, 0,
+    local clRaidCB = MakeCheckbox(content, "Raid", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.raid end,
         function(val)
             if not addon.db.combatLog then addon.db.combatLog = {} end
@@ -536,10 +686,9 @@ local function BuildGeneralPanel()
         end
     )
     clRaidCB:ClearAllPoints()
-    clRaidCB:SetPoint("TOPLEFT", clDungeonCB, "TOPLEFT", 200, 0)
+    clRaidCB:SetPoint("TOPLEFT", clDungeonCB, "TOPLEFT", 220, 0)
 
-    -- Row 2: Scenario | Battleground
-    local clScenarioCB = MakeCheckbox(scrollChild, "Scenario", 0, 0,
+    local clScenarioCB = MakeCheckbox(content, "Scenario", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.scenario end,
         function(val)
             if not addon.db.combatLog then addon.db.combatLog = {} end
@@ -549,18 +698,17 @@ local function BuildGeneralPanel()
     clScenarioCB:ClearAllPoints()
     clScenarioCB:SetPoint("TOPLEFT", clDungeonCB, "BOTTOMLEFT", 0, -4)
 
-    local clPvpCB = MakeCheckbox(scrollChild, "Battleground", 0, 0,
+    local clPvpCB = MakeCheckbox(content, "Battleground", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.pvp end,
         function(val)
             if not addon.db.combatLog then addon.db.combatLog = {} end
-            addon.db.combatLog.pvp = val  -- IsInInstance() returns "pvp" for battlegrounds
+            addon.db.combatLog.pvp = val
         end
     )
     clPvpCB:ClearAllPoints()
-    clPvpCB:SetPoint("TOPLEFT", clScenarioCB, "TOPLEFT", 200, 0)
+    clPvpCB:SetPoint("TOPLEFT", clScenarioCB, "TOPLEFT", 220, 0)
 
-    -- Row 3: Arena
-    local clArenaCB = MakeCheckbox(scrollChild, "Arena", 0, 0,
+    local clArenaCB = MakeCheckbox(content, "Arena", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.arena end,
         function(val)
             if not addon.db.combatLog then addon.db.combatLog = {} end
@@ -570,7 +718,7 @@ local function BuildGeneralPanel()
     clArenaCB:ClearAllPoints()
     clArenaCB:SetPoint("TOPLEFT", clScenarioCB, "BOTTOMLEFT", 0, -4)
 
-    local clMaxLevelCB = MakeCheckbox(scrollChild, "Only at max level", 0, 0,
+    local clMaxLevelCB = MakeCheckbox(content, "Only at max level", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.maxLevelOnly end,
         function(val)
             if not addon.db.combatLog then addon.db.combatLog = {} end
@@ -578,82 +726,40 @@ local function BuildGeneralPanel()
         end
     )
     clMaxLevelCB:ClearAllPoints()
-    clMaxLevelCB:SetPoint("TOPLEFT", clArenaCB, "BOTTOMLEFT", 0, -8)
+    clMaxLevelCB:SetPoint("TOPLEFT", clArenaCB, "BOTTOMLEFT", 0, -10)
+
+    card:SetBottomWidget(clMaxLevelCB, 12)
 
     return panel
 end
-
--- ── ElvUI Plugins subpage ─────────────────────────────────────────────────────
 
 local function BuildElvUIPanel()
     local panel = CreateFrame("Frame")
     panel.name = "ElvUI Plugins"
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("ElvUI Plugins")
-
+    local sc = MakePanelScaffold(panel, "ElvUI Plugins", "MathWroQOL_ElvUIScroll")
     local elvuiLoaded = ElvUI ~= nil
 
-    -- Dark backdrop below the title
-    local bg = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    bg:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -6, -8)
-    bg:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -6, 6)
-    bg:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile     = false,
-        edgeSize = 1,
-        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    bg:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-    bg:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-    if ElvUI then
-        local E = ElvUI[1]
-        bg:SetBackdropColor(unpack(E.media.backdropfadecolor))
-        bg:SetBackdropBorderColor(unpack(E.media.bordercolor))
-    end
+    local rootAnchor = CreateFrame("Frame", nil, sc)
+    rootAnchor:SetSize(1, 1)
+    rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
 
-    local scrollFrame = CreateFrame("ScrollFrame", "MathWroQOL_ElvUIScroll", bg, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT",     bg, "TOPLEFT",     8,   -8)
-    scrollFrame:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", -28,  8)
-    scrollFrame:EnableMouseWheel(true)
-    scrollFrame:SetScript("OnMouseWheel", function(self, delta)
-        local cur = self:GetVerticalScroll()
-        local max = self:GetVerticalScrollRange()
-        self:SetVerticalScroll(math.max(0, math.min(max, cur - delta * 20)))
-    end)
+    local card, content = MakeCard(
+        sc,
+        rootAnchor,
+        "Vehicle Bar Visibility",
+        "Keep selected action bars visible while in vehicle combat, including override bar states. Prevents mouseover fade from hiding bars during these encounters."
+    )
 
-    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(530, 900)
-    scrollFrame:SetScrollChild(scrollChild)
-
-    -- ── Vehicle Bar Visibility ────────────────────────────────────────────────
-
-    -- The "not loaded" notice anchors to scrollChild top; sectionLabel follows it.
-    -- When ElvUI is loaded, sectionLabel anchors directly to scrollChild top.
-    local sectionLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    sectionLabel:SetText("Vehicle Bar Visibility")
-
+    local notice
     if not elvuiLoaded then
-        local notice = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        notice:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 8, -12)
+        notice = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        notice:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
         notice:SetTextColor(1, 0.3, 0.3)
         notice:SetText("ElvUI is not loaded. These options are unavailable.")
-        sectionLabel:SetPoint("TOPLEFT", notice, "BOTTOMLEFT", 0, -16)
-    else
-        sectionLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 8, -12)
     end
 
-    local sectionDesc = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    sectionDesc:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -4)
-    sectionDesc:SetWidth(500)
-    sectionDesc:SetJustifyH("LEFT")
-    sectionDesc:SetText("Keep selected action bars visible while in vehicle combat, including override bar states. Prevents mouseover fade from hiding bars during these encounters.")
-
-    local widgets = {}
-
-    local enabledCB = MakeCheckbox(scrollChild, "Enable", 0, 0,
+    local enabledCB = MakeCheckbox(content, "Enable", 0, 0,
         function() return addon.db.vehicleBar and addon.db.vehicleBar.enabled end,
         function(val)
             if addon.db.vehicleBar then
@@ -663,17 +769,24 @@ local function BuildElvUIPanel()
         end
     )
     enabledCB:ClearAllPoints()
-    enabledCB:SetPoint("TOPLEFT", sectionDesc, "BOTTOMLEFT", 0, -12)
-    widgets[#widgets + 1] = enabledCB
+    if notice then
+        enabledCB:SetPoint("TOPLEFT", notice, "BOTTOMLEFT", -4, -8)
+    else
+        enabledCB:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
+    end
 
-    local barsLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    barsLabel:SetPoint("TOPLEFT", enabledCB, "BOTTOMLEFT", 0, -8)
+    local barsContainer = CreateFrame("Frame", nil, content)
+    barsContainer:SetPoint("TOPLEFT", enabledCB, "BOTTOMLEFT", 20, -6)
+    barsContainer:SetSize(430, 170)
+
+    local barsLabel = barsContainer:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    barsLabel:SetPoint("TOPLEFT", barsContainer, "TOPLEFT", 0, 0)
     barsLabel:SetText("Bars to keep visible:")
 
     local barRefs = {}
     for i = 1, 10 do
         local col = (i - 1) % 5
-        local cb = MakeCheckbox(scrollChild, "Bar "..i, 0, 0,
+        local cb = MakeCheckbox(barsContainer, "Bar " .. i, 0, 0,
             function()
                 return addon.db.vehicleBar and addon.db.vehicleBar.bars[i] == true
             end,
@@ -686,7 +799,7 @@ local function BuildElvUIPanel()
         )
         cb:ClearAllPoints()
         if i == 1 then
-            cb:SetPoint("TOPLEFT", barsLabel, "BOTTOMLEFT", 0, -8)
+            cb:SetPoint("TOPLEFT", barsLabel, "BOTTOMLEFT", -4, -6)
         elseif i == 6 then
             cb:SetPoint("TOPLEFT", barRefs[1], "BOTTOMLEFT", 0, -4)
         elseif col == 0 then
@@ -695,76 +808,49 @@ local function BuildElvUIPanel()
             cb:SetPoint("TOPLEFT", barRefs[i - 1], "TOPLEFT", 90, 0)
         end
         barRefs[i] = cb
-        widgets[#widgets + 1] = cb
     end
 
-    if not elvuiLoaded then
-        for _, w in ipairs(widgets) do
-            w:Disable()
-        end
-        sectionLabel:SetTextColor(0.5, 0.5, 0.5)
-        sectionDesc:SetTextColor(0.5, 0.5, 0.5)
-        barsLabel:SetTextColor(0.5, 0.5, 0.5)
+    local function updateVehicleGatekeeper()
+        local enabled = addon.db.vehicleBar and addon.db.vehicleBar.enabled == true
+        SetChildrenEnabled(barsContainer, enabled)
     end
+    enabledCB:HookScript("OnClick", updateVehicleGatekeeper)
+
+    if not elvuiLoaded then
+        enabledCB:Disable()
+        enabledCB:SetAlpha(0.4)
+        SetChildrenEnabled(barsContainer, false)
+    end
+
+    card:SetBottomWidget(barsContainer, 10)
+
+    panel:HookScript("OnShow", function()
+        if elvuiLoaded then
+            updateVehicleGatekeeper()
+        end
+    end)
 
     return panel
 end
-
--- ── Edit Mode subpage ─────────────────────────────────────────────────────────
 
 local function BuildEditModePanel()
     local panel = CreateFrame("Frame")
     panel.name = "Edit Mode"
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Edit Mode")
+    local sc = MakePanelScaffold(panel, "Edit Mode", "MathWroQOL_EditModeScroll")
 
-    local bg = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    bg:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -6, -8)
-    bg:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -6, 6)
-    bg:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile     = false,
-        edgeSize = 1,
-        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    bg:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-    bg:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-    if ElvUI then
-        local E = ElvUI[1]
-        bg:SetBackdropColor(unpack(E.media.backdropfadecolor))
-        bg:SetBackdropBorderColor(unpack(E.media.bordercolor))
-    end
+    local rootAnchor = CreateFrame("Frame", nil, sc)
+    rootAnchor:SetSize(1, 1)
+    rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
 
-    local scrollFrame = CreateFrame("ScrollFrame", "MathWroQOL_EditModeScroll", bg, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT",     bg, "TOPLEFT",     8,   -8)
-    scrollFrame:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", -28,  8)
-    scrollFrame:EnableMouseWheel(true)
-    scrollFrame:SetScript("OnMouseWheel", function(self, delta)
-        local cur = self:GetVerticalScroll()
-        local max = self:GetVerticalScrollRange()
-        self:SetVerticalScroll(math.max(0, math.min(max, cur - delta * 20)))
-    end)
+    local card, content = MakeCard(
+        sc,
+        rootAnchor,
+        "Nudge Overlay",
+        "Shows arrow buttons and exact coordinates when selecting a UI element in Edit Mode. Click arrows to nudge 1 px, Shift-click for 10 px."
+    )
 
-    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(530, 900)
-    scrollFrame:SetScrollChild(scrollChild)
-
-    -- ── Nudge Overlay ─────────────────────────────────────────────────────────
-
-    local nudgeLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    nudgeLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 8, -12)
-    nudgeLabel:SetText("Nudge Overlay")
-
-    local nudgeDesc = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    nudgeDesc:SetPoint("TOPLEFT", nudgeLabel, "BOTTOMLEFT", 0, -4)
-    nudgeDesc:SetWidth(500)
-    nudgeDesc:SetJustifyH("LEFT")
-    nudgeDesc:SetText("Shows arrow buttons and exact coordinates when selecting a UI element in Edit Mode. Click arrows to nudge 1 px, Shift-click for 10 px.")
-
-    local nudgeCB = MakeCheckbox(scrollChild, "Enable nudge overlay", 0, 0,
+    local nudgeCB = MakeCheckbox(content, "Enable nudge overlay", 0, 0,
         function() return addon.db.editModeNudge and addon.db.editModeNudge.enabled end,
         function(val)
             if not addon.db.editModeNudge then addon.db.editModeNudge = {} end
@@ -773,122 +859,138 @@ local function BuildEditModePanel()
         end
     )
     nudgeCB:ClearAllPoints()
-    nudgeCB:SetPoint("TOPLEFT", nudgeDesc, "BOTTOMLEFT", 0, -8)
+    nudgeCB:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
+
+    local detailsContainer = CreateFrame("Frame", nil, content)
+    detailsContainer:SetPoint("TOPLEFT", nudgeCB, "BOTTOMLEFT", 20, -6)
+    detailsContainer:SetSize(430, 40)
+
+    local details = detailsContainer:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    details:SetPoint("TOPLEFT", detailsContainer, "TOPLEFT", 0, 0)
+    details:SetWidth(420)
+    details:SetJustifyH("LEFT")
+    details:SetText("Applies while Edit Mode is active.")
+
+    local function updateNudgeGatekeeper()
+        SetChildrenEnabled(detailsContainer, addon.db.editModeNudge and addon.db.editModeNudge.enabled == true)
+    end
+    nudgeCB:HookScript("OnClick", updateNudgeGatekeeper)
+
+    card:SetBottomWidget(detailsContainer, 10)
+
+    panel:HookScript("OnShow", updateNudgeGatekeeper)
 
     return panel
 end
 
--- ── Combat Tracker subpage ────────────────────────────────────────────────────
-
 local function BuildCombatTrackerPanel()
     local panel = CreateFrame("Frame")
-    panel.name  = "Combat Tracker"
+    panel.name = "Combat Tracker"
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Combat Tracker")
-    title:SetTextColor(1, 0.82, 0, 1)
+    local sc = MakePanelScaffold(panel, "Combat Tracker", "MathWroQOL_CTScroll")
 
-    local bg = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    bg:SetPoint("TOPLEFT",     title, "BOTTOMLEFT", -6, -8)
-    bg:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -6, 6)
-    bg:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile     = false,
-        edgeSize = 1,
-        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    bg:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-    bg:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-    if ElvUI then
-        local E = ElvUI[1]
-        bg:SetBackdropColor(unpack(E.media.backdropfadecolor))
-        bg:SetBackdropBorderColor(unpack(E.media.bordercolor))
-    end
-
-    local scrollFrame = CreateFrame("ScrollFrame", "MathWroQOL_CTScroll", bg, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT",     bg, "TOPLEFT",     8,   -8)
-    scrollFrame:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", -28,  8)
-    scrollFrame:EnableMouseWheel(true)
-    scrollFrame:SetScript("OnMouseWheel", function(self, delta)
-        local cur = self:GetVerticalScroll()
-        local max = self:GetVerticalScrollRange()
-        self:SetVerticalScroll(math.max(0, math.min(max, cur - delta * 20)))
-    end)
-
-    local sc = CreateFrame("Frame", nil, scrollFrame)
-    sc:SetSize(530, 2000)
-    scrollFrame:SetScrollChild(sc)
-
-    -- Collect refresh callbacks; called on panel OnShow
     local refreshFns = {}
 
-    -- ── Global enable ──────────────────────────────────────────────────────────
+    local rootAnchor = CreateFrame("Frame", nil, sc)
+    rootAnchor:SetSize(1, 1)
+    rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
 
-    local enableCB = MakeCheckbox(sc, "Enable Combat Tracker", 8, -16,
+    local topCard, topContent = MakeCard(
+        sc,
+        rootAnchor,
+        "Combat Tracker",
+        "Track racials, trinkets, and consumables with fully configurable icon groups."
+    )
+
+    local enableCB = MakeCheckbox(topContent, "Enable Combat Tracker", 0, 0,
         function() return addon.db.combatTracker.enabled end,
         function(val)
             addon.db.combatTracker.enabled = val
             addon:NotifyFeature("combatTracker")
         end
     )
+    enableCB:ClearAllPoints()
+    enableCB:SetPoint("TOPLEFT", topContent, "TOPLEFT", 12, -2)
 
-    local resetBtn = CreateFrame("Button", nil, sc, "UIPanelButtonTemplate")
+    local resetBtn = CreateFrame("Button", nil, topContent, "UIPanelButtonTemplate")
     resetBtn:SetSize(160, 22)
+    resetBtn:SetPoint("TOPLEFT", enableCB, "BOTTOMLEFT", 20, -8)
     resetBtn:SetText("Reset Positions")
     local S = ElvSkin()
     if S then S:HandleButton(resetBtn) end
-    resetBtn:ClearAllPoints()
-    resetBtn:SetPoint("TOPLEFT", enableCB, "BOTTOMLEFT", 0, -8)
     resetBtn:SetScript("OnClick", function()
         local defaults = {
             racials     = { point = "CENTER", x = -220, y = 200 },
-            trinkets    = { point = "CENTER", x =    0, y = 200 },
-            consumables = { point = "CENTER", x =  220, y = 200 },
+            trinkets    = { point = "CENTER", x = 0, y = 200 },
+            consumables = { point = "CENTER", x = 220, y = 200 },
         }
         for key, def in pairs(defaults) do
             local f = addon.db.combatTracker.frames[key]
             f.point = def.point
-            f.x     = def.x
-            f.y     = def.y
+            f.x = def.x
+            f.y = def.y
         end
         addon:NotifyFeature("combatTracker")
     end)
 
-    local sep0 = MakeSeparator(sc, resetBtn, -12)
+    local topSep = MakeSeparator(topContent, resetBtn, -10)
+    topCard:SetBottomWidget(topSep, 10)
 
-    -- ── Helper: build a per-section block ─────────────────────────────────────
+    local trackerBody = CreateFrame("Frame", nil, sc)
+    trackerBody:SetPoint("TOPLEFT", topCard, "BOTTOMLEFT", 0, -12)
+    trackerBody:SetSize(500, 2200)
 
     local LAYOUT_OPTIONS = {
         { label = "Horizontal", value = "horizontal" },
-        { label = "Vertical",   value = "vertical"   },
-        { label = "Grid",       value = "grid"        },
+        { label = "Vertical", value = "vertical" },
+        { label = "Grid", value = "grid" },
     }
 
     local STACK_FONT_OPTIONS = {
         { label = "Friz Quadrata (Default)", value = "Fonts\\FRIZQT__.TTF" },
-        { label = "Arial Narrow",            value = "Fonts\\ARIALN.TTF"   },
-        { label = "Morpheus",                value = "Fonts\\MORPHEUS.TTF" },
-        { label = "Skurri",                  value = "Fonts\\skurri.TTF"   },
+        { label = "Arial Narrow", value = "Fonts\\ARIALN.TTF" },
+        { label = "Morpheus", value = "Fonts\\MORPHEUS.TTF" },
+        { label = "Skurri", value = "Fonts\\skurri.TTF" },
     }
 
     local GROW_DIR_OPTIONS = {
-        { label = "Grow Right",       value = "growRight" },
-        { label = "Grow Left",        value = "growLeft"  },
-        { label = "Grow Down",        value = "growDown"  },
-        { label = "Grow Up",          value = "growUp"    },
-        { label = "Center Horiz.",    value = "centerH"   },
-        { label = "Center Vert.",     value = "centerV"   },
+        { label = "Grow Right", value = "growRight" },
+        { label = "Grow Left", value = "growLeft" },
+        { label = "Grow Down", value = "growDown" },
+        { label = "Grow Up", value = "growUp" },
+        { label = "Center Horiz.", value = "centerH" },
+        { label = "Center Vert.", value = "centerV" },
     }
 
-    local function BuildSectionBlock(anchor, key, sectionTitle, extraFn)
-        local lbl = sc:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-        lbl:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -10)
-        lbl:SetText(sectionTitle)
-        lbl:SetTextColor(1, 0.82, 0, 1)
+    local DROPDOWN_X = 120
+    local ROW_SPACING = 10
+    local GROUP_SPACING = 16
 
-        local secEnabledCB = MakeCheckbox(sc, "Enable", 0, 0,
+    local function MakeOptionRow(parent, labelText, controlFn)
+        local row = CreateFrame("Frame", nil, parent)
+        row:SetHeight(24)
+        row:SetPoint("LEFT", parent, "LEFT", 0, 0)
+        row:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
+
+        local lbl = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        lbl:SetPoint("LEFT", row, "LEFT", 0, 0)
+        lbl:SetText(labelText)
+
+        local control = controlFn(row)
+        if control then
+            control:ClearAllPoints()
+            control:SetPoint("LEFT", row, "LEFT", DROPDOWN_X, 0)
+        end
+
+        row.label = lbl
+        row.control = control
+        return row
+    end
+
+    local function BuildSectionBlock(section, key, sectionTitle, extraFn)
+        local content = section.content
+
+        local secEnabledCB = MakeCheckbox(content, "Enable", 0, 0,
             function() return addon.db.combatTracker.frames[key].enabled end,
             function(val)
                 addon.db.combatTracker.frames[key].enabled = val
@@ -896,94 +998,100 @@ local function BuildCombatTrackerPanel()
             end
         )
         secEnabledCB:ClearAllPoints()
-        secEnabledCB:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -8)
+        secEnabledCB:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -4)
 
-        local layoutLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        layoutLabel:SetPoint("TOPLEFT", secEnabledCB, "BOTTOMLEFT", 0, -10)
-        layoutLabel:SetText("Layout:")
+        local gated = CreateFrame("Frame", nil, content)
+        gated:SetPoint("TOPLEFT", secEnabledCB, "BOTTOMLEFT", 16, -ROW_SPACING)
+        gated:SetPoint("RIGHT", content, "RIGHT", -8, 0)
+        gated:SetHeight(1200)
 
-        local layoutBtn = MakeDropdown(sc, LAYOUT_OPTIONS,
-            function() return addon.db.combatTracker.frames[key].layout end,
-            function(val) addon.db.combatTracker.frames[key].layout = val end
-        )
-        layoutBtn:SetPoint("LEFT", layoutLabel, "RIGHT", 8, 0)
-        table.insert(refreshFns, function() layoutBtn:Refresh() end)
-
-        local gridColsLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        gridColsLabel:SetPoint("TOPLEFT", layoutLabel, "TOPLEFT", 220, 0)
-        gridColsLabel:SetText("Grid columns:")
+        -- ── Layout & Grid ──
+        local layoutRow = MakeOptionRow(gated, "Layout:", function(row)
+            local btn = MakeDropdown(row, LAYOUT_OPTIONS,
+                function() return addon.db.combatTracker.frames[key].layout end,
+                function(val) addon.db.combatTracker.frames[key].layout = val end
+            )
+            table.insert(refreshFns, function() btn:Refresh() end)
+            return btn
+        end)
+        layoutRow:SetPoint("TOPLEFT", gated, "TOPLEFT", 0, 0)
 
         local COLS_OPTIONS = {}
         for i = 2, 5 do
             table.insert(COLS_OPTIONS, { label = tostring(i) .. " cols", value = i })
         end
-        local colsBtn = MakeDropdown(sc, COLS_OPTIONS,
-            function() return addon.db.combatTracker.frames[key].gridCols end,
-            function(val) addon.db.combatTracker.frames[key].gridCols = val end
-        )
-        colsBtn:SetPoint("LEFT", gridColsLabel, "RIGHT", 8, 0)
-        table.insert(refreshFns, function() colsBtn:Refresh() end)
+        local gridRow = MakeOptionRow(gated, "Grid columns:", function(row)
+            local btn = MakeDropdown(row, COLS_OPTIONS,
+                function() return addon.db.combatTracker.frames[key].gridCols end,
+                function(val) addon.db.combatTracker.frames[key].gridCols = val end
+            )
+            table.insert(refreshFns, function() btn:Refresh() end)
+            return btn
+        end)
+        gridRow:SetPoint("TOPLEFT", layoutRow, "BOTTOMLEFT", 0, -ROW_SPACING)
 
-        local widthSlider = MakeSliderWithInput(sc, "Icon Width (px)", 16, 80,
+        local growDirRow = MakeOptionRow(gated, "Anchor direction:", function(row)
+            local btn = MakeDropdown(row, GROW_DIR_OPTIONS,
+                function() return addon.db.combatTracker.frames[key].growDirection or "growRight" end,
+                function(val)
+                    addon.db.combatTracker.frames[key].growDirection = val
+                    addon:NotifyFeature("combatTracker")
+                end
+            )
+            table.insert(refreshFns, function() btn:Refresh() end)
+            return btn
+        end)
+        growDirRow:SetPoint("TOPLEFT", gridRow, "BOTTOMLEFT", 0, -ROW_SPACING)
+
+        local mergeOptions = { { label = "Standalone", value = "none" } }
+        local sectionNames = { racials = "Racials", trinkets = "Trinkets", consumables = "Consumables" }
+        for _, other in ipairs({ "racials", "trinkets", "consumables" }) do
+            if other ~= key then
+                table.insert(mergeOptions, { label = "-> " .. sectionNames[other], value = other })
+            end
+        end
+        local mergeRow = MakeOptionRow(gated, "Merge into:", function(row)
+            local btn = MakeDropdown(row, mergeOptions,
+                function()
+                    return addon.db.combatTracker.frames[key].mergeInto or "none"
+                end,
+                function(val)
+                    addon.db.combatTracker.frames[key].mergeInto = (val == "none") and nil or val
+                    addon:NotifyFeature("combatTracker")
+                end
+            )
+            table.insert(refreshFns, function() btn:Refresh() end)
+            return btn
+        end)
+        mergeRow:SetPoint("TOPLEFT", growDirRow, "BOTTOMLEFT", 0, -ROW_SPACING)
+
+        -- ── Icon Size ──
+        local sizeSep = MakeSeparator(gated, mergeRow, -GROUP_SPACING)
+
+        local widthSlider = MakeSliderWithInput(gated, "Icon Width (px)", 16, 80,
             function() return addon.db.combatTracker.frames[key].iconWidth end,
             function(val)
                 addon.db.combatTracker.frames[key].iconWidth = val
                 addon:NotifyFeature("combatTracker")
             end
         )
-        widthSlider:SetPoint("TOPLEFT", layoutLabel, "BOTTOMLEFT", 0, -12)
+        widthSlider:SetPoint("TOPLEFT", sizeSep, "BOTTOMLEFT", 0, -GROUP_SPACING)
         table.insert(refreshFns, function() widthSlider:Refresh() end)
 
-        local heightSlider = MakeSliderWithInput(sc, "Icon Height (px)", 16, 80,
+        local heightSlider = MakeSliderWithInput(gated, "Icon Height (px)", 16, 80,
             function() return addon.db.combatTracker.frames[key].iconHeight end,
             function(val)
                 addon.db.combatTracker.frames[key].iconHeight = val
                 addon:NotifyFeature("combatTracker")
             end
         )
-        heightSlider:SetPoint("TOPLEFT", widthSlider, "BOTTOMLEFT", 0, -8)
+        heightSlider:SetPoint("TOPLEFT", widthSlider, "BOTTOMLEFT", 0, -4)
         table.insert(refreshFns, function() heightSlider:Refresh() end)
 
-        -- Merge-into options: "Standalone" + other two section names
-        local mergeOptions = { { label = "Standalone", value = "none" } }
-        local sectionNames = { racials="Racials", trinkets="Trinkets", consumables="Consumables" }
-        for _, other in ipairs({ "racials", "trinkets", "consumables" }) do
-            if other ~= key then
-                table.insert(mergeOptions, { label = "-> " .. sectionNames[other], value = other })
-            end
-        end
+        -- ── Stack Counter ──
+        local stackSep = MakeSeparator(gated, heightSlider, -GROUP_SPACING)
 
-        local mergeLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        mergeLabel:SetPoint("TOPLEFT", heightSlider, "BOTTOMLEFT", 0, -10)
-        mergeLabel:SetText("Merge into:")
-
-        local mergeBtn = MakeDropdown(sc, mergeOptions,
-            function()
-                return addon.db.combatTracker.frames[key].mergeInto or "none"
-            end,
-            function(val)
-                addon.db.combatTracker.frames[key].mergeInto = (val == "none") and nil or val
-                addon:NotifyFeature("combatTracker")
-            end
-        )
-        mergeBtn:SetPoint("LEFT", mergeLabel, "RIGHT", 8, 0)
-        table.insert(refreshFns, function() mergeBtn:Refresh() end)
-
-        local growDirLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        growDirLabel:SetPoint("TOPLEFT", mergeLabel, "BOTTOMLEFT", 0, -10)
-        growDirLabel:SetText("Anchor direction:")
-
-        local growDirBtn = MakeDropdown(sc, GROW_DIR_OPTIONS,
-            function() return addon.db.combatTracker.frames[key].growDirection or "growRight" end,
-            function(val)
-                addon.db.combatTracker.frames[key].growDirection = val
-                addon:NotifyFeature("combatTracker")
-            end
-        )
-        growDirBtn:SetPoint("LEFT", growDirLabel, "RIGHT", 8, 0)
-        table.insert(refreshFns, function() growDirBtn:Refresh() end)
-
-        local stackEnabledCB = MakeCheckbox(sc, "Show stack counter on icons", 0, 0,
+        local stackEnabledCB = MakeCheckbox(gated, "Show stack counter on icons", 0, 0,
             function() return addon.db.combatTracker.frames[key].stackCountEnabled ~= false end,
             function(val)
                 addon.db.combatTracker.frames[key].stackCountEnabled = val
@@ -991,36 +1099,37 @@ local function BuildCombatTrackerPanel()
             end
         )
         stackEnabledCB:ClearAllPoints()
-        stackEnabledCB:SetPoint("TOPLEFT", growDirLabel, "BOTTOMLEFT", 0, -10)
+        stackEnabledCB:SetPoint("TOPLEFT", stackSep, "BOTTOMLEFT", 0, -GROUP_SPACING)
 
-        local stackFontSizeSlider = MakeSliderWithInput(sc, "Counter font size", 8, 24,
+        local stackFontSizeSlider = MakeSliderWithInput(gated, "Counter font size", 8, 24,
             function() return addon.db.combatTracker.frames[key].stackCountFontSize end,
             function(val)
                 addon.db.combatTracker.frames[key].stackCountFontSize = val
                 addon:NotifyFeature("combatTracker")
             end
         )
-        stackFontSizeSlider:SetPoint("TOPLEFT", stackEnabledCB, "BOTTOMLEFT", 0, -8)
+        stackFontSizeSlider:SetPoint("TOPLEFT", stackEnabledCB, "BOTTOMLEFT", 16, -ROW_SPACING)
         table.insert(refreshFns, function() stackFontSizeSlider:Refresh() end)
 
-        local stackFontLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        stackFontLabel:SetPoint("TOPLEFT", stackFontSizeSlider, "BOTTOMLEFT", 0, -10)
-        stackFontLabel:SetText("Counter font:")
+        local stackFontRow = MakeOptionRow(gated, "Counter font:", function(row)
+            local btn = MakeDropdown(row, STACK_FONT_OPTIONS,
+                function()
+                    return addon.db.combatTracker.frames[key].stackCountFont or "Fonts\\FRIZQT__.TTF"
+                end,
+                function(val)
+                    addon.db.combatTracker.frames[key].stackCountFont = val
+                    addon:NotifyFeature("combatTracker")
+                end
+            )
+            table.insert(refreshFns, function() btn:Refresh() end)
+            return btn
+        end)
+        stackFontRow:SetPoint("TOPLEFT", stackFontSizeSlider, "BOTTOMLEFT", 0, -ROW_SPACING)
 
-        local stackFontBtn = MakeDropdown(sc, STACK_FONT_OPTIONS,
-            function()
-                return addon.db.combatTracker.frames[key].stackCountFont or "Fonts\\FRIZQT__.TTF"
-            end,
-            function(val)
-                addon.db.combatTracker.frames[key].stackCountFont = val
-                addon:NotifyFeature("combatTracker")
-            end
-        )
-        stackFontBtn:SetPoint("LEFT", stackFontLabel, "RIGHT", 8, 0)
-        table.insert(refreshFns, function() stackFontBtn:Refresh() end)
+        -- ── Cooldown Counter ──
+        local cdSep = MakeSeparator(gated, stackFontRow, -GROUP_SPACING)
 
-        -- Cooldown countdown text font settings
-        local cdEnabledCB = MakeCheckbox(sc, "Show cooldown countdown text", 0, 0,
+        local cdEnabledCB = MakeCheckbox(gated, "Show cooldown countdown text", 0, 0,
             function() return addon.db.combatTracker.frames[key].cdCountEnabled ~= false end,
             function(val)
                 addon.db.combatTracker.frames[key].cdCountEnabled = val
@@ -1028,105 +1137,114 @@ local function BuildCombatTrackerPanel()
             end
         )
         cdEnabledCB:ClearAllPoints()
-        cdEnabledCB:SetPoint("TOPLEFT", stackFontLabel, "BOTTOMLEFT", 0, -10)
+        cdEnabledCB:SetPoint("TOPLEFT", cdSep, "BOTTOMLEFT", 0, -GROUP_SPACING)
 
-        local cdFontSizeSlider = MakeSliderWithInput(sc, "Cooldown font size", 8, 24,
+        local cdFontSizeSlider = MakeSliderWithInput(gated, "Cooldown font size", 8, 24,
             function() return addon.db.combatTracker.frames[key].cdCountFontSize end,
             function(val)
                 addon.db.combatTracker.frames[key].cdCountFontSize = val
                 addon:NotifyFeature("combatTracker")
             end
         )
-        cdFontSizeSlider:SetPoint("TOPLEFT", cdEnabledCB, "BOTTOMLEFT", 0, -8)
+        cdFontSizeSlider:SetPoint("TOPLEFT", cdEnabledCB, "BOTTOMLEFT", 16, -ROW_SPACING)
         table.insert(refreshFns, function() cdFontSizeSlider:Refresh() end)
 
-        local cdFontLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        cdFontLabel:SetPoint("TOPLEFT", cdFontSizeSlider, "BOTTOMLEFT", 0, -10)
-        cdFontLabel:SetText("Cooldown font:")
+        local cdFontRow = MakeOptionRow(gated, "Cooldown font:", function(row)
+            local btn = MakeDropdown(row, STACK_FONT_OPTIONS,
+                function()
+                    return addon.db.combatTracker.frames[key].cdCountFont or "Fonts\\FRIZQT__.TTF"
+                end,
+                function(val)
+                    addon.db.combatTracker.frames[key].cdCountFont = val
+                    addon:NotifyFeature("combatTracker")
+                end
+            )
+            table.insert(refreshFns, function() btn:Refresh() end)
+            return btn
+        end)
+        cdFontRow:SetPoint("TOPLEFT", cdFontSizeSlider, "BOTTOMLEFT", 0, -ROW_SPACING)
 
-        local cdFontBtn = MakeDropdown(sc, STACK_FONT_OPTIONS,
-            function()
-                return addon.db.combatTracker.frames[key].cdCountFont or "Fonts\\FRIZQT__.TTF"
-            end,
-            function(val)
-                addon.db.combatTracker.frames[key].cdCountFont = val
-                addon:NotifyFeature("combatTracker")
-            end
-        )
-        cdFontBtn:SetPoint("LEFT", cdFontLabel, "RIGHT", 8, 0)
-        table.insert(refreshFns, function() cdFontBtn:Refresh() end)
-
-        local lastWidget = cdFontLabel
+        -- ── Extra + Gatekeeper ──
+        local lastWidget = cdFontRow
         if extraFn then
-            lastWidget = extraFn(stackFontLabel) or stackFontLabel
+            local extraSep = MakeSeparator(gated, cdFontRow, -GROUP_SPACING)
+            lastWidget = extraFn(gated, extraSep) or extraSep
         end
+
+        local function updateSectionGatekeeper()
+            SetChildrenEnabled(gated, addon.db.combatTracker.frames[key].enabled == true)
+        end
+        secEnabledCB:HookScript("OnClick", updateSectionGatekeeper)
+        table.insert(refreshFns, updateSectionGatekeeper)
+
+        section:SetContentBottom(lastWidget, 10)
+        table.insert(refreshFns, function() section:UpdateLayout() end)
 
         return lastWidget
     end
 
-    -- ── RACIALS section ────────────────────────────────────────────────────────
+    local racialsSection = MakeCollapsibleSection(trackerBody, "Racials", false)
+    racialsSection:SetPoint("TOPLEFT", trackerBody, "TOPLEFT", 0, 0)
 
     local racialSpellContainer
-    local lastRacialWidget
-
-    lastRacialWidget = BuildSectionBlock(sep0, "racials", "RACIALS", function(mergeLabel)
-        local toggleLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        toggleLabel:SetPoint("TOPLEFT", mergeLabel, "BOTTOMLEFT", 0, -14)
+    BuildSectionBlock(racialsSection, "racials", "RACIALS", function(parent, anchor)
+        local toggleLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        toggleLabel:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -14)
         toggleLabel:SetText("Hide racial abilities:")
 
-        racialSpellContainer = CreateFrame("Frame", nil, sc)
+        racialSpellContainer = CreateFrame("Frame", nil, parent)
         racialSpellContainer:SetPoint("TOPLEFT", toggleLabel, "BOTTOMLEFT", 0, -6)
-        racialSpellContainer:SetSize(500, 100)
+        racialSpellContainer:SetSize(430, 10)
 
+        local function RebuildRacialList()
+            for _, child in ipairs({ racialSpellContainer:GetChildren() }) do
+                child:Hide()
+                child:SetParent(nil)
+            end
+            for _, region in ipairs({ racialSpellContainer:GetRegions() }) do
+                if region.Hide then region:Hide() end
+            end
+
+            local entries = addon.combatTracker
+                and addon.combatTracker.sections.racials
+                and addon.combatTracker.sections.racials._allRacialNames
+                or {}
+
+            local totalHeight = 0
+            local prevCB
+            for _, entry in ipairs(entries) do
+                local cb = MakeCheckbox(racialSpellContainer, entry.name, 0, 0,
+                    function()
+                        return not (addon.db.combatTracker.racials.hiddenSpells[entry.name] == true)
+                    end,
+                    function(val)
+                        addon.db.combatTracker.racials.hiddenSpells[entry.name] = (not val) and true or nil
+                        addon:NotifyFeature("combatTracker")
+                    end
+                )
+                cb:ClearAllPoints()
+                if prevCB then
+                    cb:SetPoint("TOPLEFT", prevCB, "BOTTOMLEFT", 0, -4)
+                else
+                    cb:SetPoint("TOPLEFT", racialSpellContainer, "TOPLEFT", 0, 0)
+                end
+                totalHeight = totalHeight + 26
+                prevCB = cb
+            end
+
+            racialSpellContainer:SetHeight(math.max(totalHeight, 10))
+            racialsSection:SetContentBottom(racialSpellContainer, 10)
+        end
+
+        table.insert(refreshFns, RebuildRacialList)
         return racialSpellContainer
     end)
 
-    -- Refresh callback for racial toggles: rebuild checkbox list for current race
-    table.insert(refreshFns, function()
-        -- Clear previous children
-        for _, child in ipairs({ racialSpellContainer:GetChildren() }) do
-            child:Hide()
-            child:SetParent(nil)
-        end
-        for _, child in ipairs({ racialSpellContainer:GetRegions() }) do
-            child:Hide()
-        end
+    local trinketsSection = MakeCollapsibleSection(trackerBody, "Trinkets", false)
+    trinketsSection:SetPoint("TOPLEFT", racialsSection, "BOTTOMLEFT", 0, -12)
 
-        local entries = addon.combatTracker
-            and addon.combatTracker.sections.racials
-            and addon.combatTracker.sections.racials._allRacialNames
-            or {}
-
-        local totalHeight = 0
-        local prevCB
-        for _, entry in ipairs(entries) do
-            local cb = MakeCheckbox(racialSpellContainer, entry.name, 0, 0,
-                function()
-                    return not (addon.db.combatTracker.racials.hiddenSpells[entry.name] == true)
-                end,
-                function(val)
-                    addon.db.combatTracker.racials.hiddenSpells[entry.name] = (not val) and true or nil
-                    addon:NotifyFeature("combatTracker")
-                end
-            )
-            cb:ClearAllPoints()
-            if prevCB then
-                cb:SetPoint("TOPLEFT", prevCB, "BOTTOMLEFT", 0, -4)
-            else
-                cb:SetPoint("TOPLEFT", racialSpellContainer, "TOPLEFT", 0, 0)
-            end
-            totalHeight = totalHeight + 26
-            prevCB = cb
-        end
-        racialSpellContainer:SetHeight(math.max(totalHeight, 10))
-    end)
-
-    local sep1 = MakeSeparator(sc, racialSpellContainer, -12)
-
-    -- ── TRINKETS section ───────────────────────────────────────────────────────
-
-    local lastTrinketWidget = BuildSectionBlock(sep1, "trinkets", "TRINKETS", function(mergeLabel)
-        local onUseCB = MakeCheckbox(sc, "On-use only (hide passive trinkets)", 0, 0,
+    BuildSectionBlock(trinketsSection, "trinkets", "TRINKETS", function(parent, anchor)
+        local onUseCB = MakeCheckbox(parent, "On-use only (hide passive trinkets)", 0, 0,
             function() return addon.db.combatTracker.frames.trinkets.onUseOnly end,
             function(val)
                 addon.db.combatTracker.frames.trinkets.onUseOnly = val
@@ -1134,16 +1252,15 @@ local function BuildCombatTrackerPanel()
             end
         )
         onUseCB:ClearAllPoints()
-        onUseCB:SetPoint("TOPLEFT", mergeLabel, "BOTTOMLEFT", 0, -10)
+        onUseCB:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -4, -10)
         return onUseCB
     end)
 
-    local sep2 = MakeSeparator(sc, lastTrinketWidget, -12)
+    local consumablesSection = MakeCollapsibleSection(trackerBody, "Consumables", false)
+    consumablesSection:SetPoint("TOPLEFT", trinketsSection, "BOTTOMLEFT", 0, -12)
 
-    -- ── CONSUMABLES section ────────────────────────────────────────────────────
-
-    local lastConsWidget = BuildSectionBlock(sep2, "consumables", "CONSUMABLES", function(mergeLabel)
-        local hideCB = MakeCheckbox(sc, "Hide icon if not in inventory", 0, 0,
+    BuildSectionBlock(consumablesSection, "consumables", "CONSUMABLES", function(parent, anchor)
+        local hideCB = MakeCheckbox(parent, "Hide icon if not in inventory", 0, 0,
             function() return addon.db.combatTracker.frames.consumables.hideIfMissing end,
             function(val)
                 addon.db.combatTracker.frames.consumables.hideIfMissing = val
@@ -1151,13 +1268,13 @@ local function BuildCombatTrackerPanel()
             end
         )
         hideCB:ClearAllPoints()
-        hideCB:SetPoint("TOPLEFT", mergeLabel, "BOTTOMLEFT", 0, -10)
+        hideCB:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -4, -10)
 
-        local typeLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        typeLabel:SetPoint("TOPLEFT", hideCB, "BOTTOMLEFT", 0, -10)
+        local typeLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        typeLabel:SetPoint("TOPLEFT", hideCB, "BOTTOMLEFT", 4, -10)
         typeLabel:SetText("Track these consumable types:")
 
-        local combatCB = MakeCheckbox(sc, "Combat Potions", 0, 0,
+        local combatCB = MakeCheckbox(parent, "Combat Potions", 0, 0,
             function() return addon.db.combatTracker.frames.consumables.showCombatPotions end,
             function(val)
                 addon.db.combatTracker.frames.consumables.showCombatPotions = val
@@ -1165,9 +1282,9 @@ local function BuildCombatTrackerPanel()
             end
         )
         combatCB:ClearAllPoints()
-        combatCB:SetPoint("TOPLEFT", typeLabel, "BOTTOMLEFT", 0, -6)
+        combatCB:SetPoint("TOPLEFT", typeLabel, "BOTTOMLEFT", -4, -6)
 
-        local healCB = MakeCheckbox(sc, "Healing Potions", 0, 0,
+        local healCB = MakeCheckbox(parent, "Healing Potions", 0, 0,
             function() return addon.db.combatTracker.frames.consumables.showHealingPotions end,
             function(val)
                 addon.db.combatTracker.frames.consumables.showHealingPotions = val
@@ -1177,7 +1294,7 @@ local function BuildCombatTrackerPanel()
         healCB:ClearAllPoints()
         healCB:SetPoint("TOPLEFT", combatCB, "TOPLEFT", 200, 0)
 
-        local manaCB = MakeCheckbox(sc, "Mana Potions", 0, 0,
+        local manaCB = MakeCheckbox(parent, "Mana Potions", 0, 0,
             function() return addon.db.combatTracker.frames.consumables.showManaPotions end,
             function(val)
                 addon.db.combatTracker.frames.consumables.showManaPotions = val
@@ -1187,7 +1304,7 @@ local function BuildCombatTrackerPanel()
         manaCB:ClearAllPoints()
         manaCB:SetPoint("TOPLEFT", combatCB, "BOTTOMLEFT", 0, -4)
 
-        local hsCB = MakeCheckbox(sc, "Healthstone", 0, 0,
+        local hsCB = MakeCheckbox(parent, "Healthstone", 0, 0,
             function() return addon.db.combatTracker.frames.consumables.showHealthstone end,
             function(val)
                 addon.db.combatTracker.frames.consumables.showHealthstone = val
@@ -1197,28 +1314,25 @@ local function BuildCombatTrackerPanel()
         hsCB:ClearAllPoints()
         hsCB:SetPoint("TOPLEFT", manaCB, "TOPLEFT", 200, 0)
 
-        local customLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        customLabel:SetPoint("TOPLEFT", manaCB, "BOTTOMLEFT", 0, -14)
-        customLabel:SetJustifyH("LEFT")
+        local customLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        customLabel:SetPoint("TOPLEFT", manaCB, "BOTTOMLEFT", 4, -14)
         customLabel:SetText("Custom Items — enter an item ID and press Add:")
 
-        -- Input row: numeric EditBox + Add button
-        local idBox = CreateFrame("EditBox", nil, sc, "InputBoxTemplate")
+        local idBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
         idBox:SetSize(80, 20)
         idBox:SetNumeric(true)
         idBox:SetAutoFocus(false)
         idBox:SetMaxLetters(10)
         idBox:SetPoint("TOPLEFT", customLabel, "BOTTOMLEFT", 0, -6)
 
-        local addBtn = CreateFrame("Button", nil, sc, "UIPanelButtonTemplate")
+        local addBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
         addBtn:SetSize(60, 22)
         addBtn:SetText("Add")
         local Sc = ElvSkin()
         if Sc then Sc:HandleButton(addBtn) end
         addBtn:SetPoint("LEFT", idBox, "RIGHT", 6, 1)
 
-        -- Container for the item list rows
-        local itemListFrame = CreateFrame("Frame", nil, sc)
+        local itemListFrame = CreateFrame("Frame", nil, parent)
         itemListFrame:SetPoint("TOPLEFT", idBox, "BOTTOMLEFT", 0, -6)
         itemListFrame:SetSize(420, 10)
 
@@ -1227,13 +1341,13 @@ local function BuildCombatTrackerPanel()
         local function RebuildItemList()
             for _, r in ipairs(itemRowPool) do r:Hide() end
 
-            local ci  = addon.db.combatTracker.frames.consumables.customItems or {}
+            local ci = addon.db.combatTracker.frames.consumables.customItems or {}
             local ids = {}
             for id in pairs(ci) do table.insert(ids, id) end
             table.sort(ids)
 
-            local ROW_H   = 28
-            local prevRow = nil
+            local ROW_H = 28
+            local prevRow
             for idx, id in ipairs(ids) do
                 local row = itemRowPool[idx]
                 if not row then
@@ -1291,7 +1405,9 @@ local function BuildCombatTrackerPanel()
                 row:Show()
                 prevRow = row
             end
+
             itemListFrame:SetHeight(math.max(#ids * (ROW_H + 2), 10))
+            consumablesSection:SetContentBottom(itemListFrame, 10)
         end
 
         addBtn:SetScript("OnClick", function()
@@ -1306,7 +1422,6 @@ local function BuildCombatTrackerPanel()
         end)
         idBox:SetScript("OnEnterPressed", function() addBtn:Click() end)
 
-        -- Refresh GET_ITEM_INFO_RECEIVED while panel is visible so icons populate
         local infoFrame = CreateFrame("Frame")
         infoFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
         infoFrame:SetScript("OnEvent", function()
@@ -1314,22 +1429,20 @@ local function BuildCombatTrackerPanel()
         end)
 
         table.insert(refreshFns, RebuildItemList)
-
         return itemListFrame
     end)
 
-    local sep3 = MakeSeparator(sc, lastConsWidget, -12)
-
-    -- ── MASQUE section (hidden if Masque not loaded) ────────────────────────────
+    local masqueCard, masqueContent = MakeCard(
+        trackerBody,
+        consumablesSection,
+        "Masque",
+        "Optional icon skinning integration for Combat Tracker groups."
+    )
 
     local MSQ = LibStub and LibStub("Masque", true)
+    local masqueLastWidget
     if MSQ then
-        local masqueLabel = sc:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-        masqueLabel:SetPoint("TOPLEFT", sep3, "BOTTOMLEFT", 0, -10)
-        masqueLabel:SetText("MASQUE SKINNING")
-        masqueLabel:SetTextColor(1, 0.82, 0, 1)
-
-        local masqueCB = MakeCheckbox(sc, "Enable Masque skinning", 0, 0,
+        local masqueCB = MakeCheckbox(masqueContent, "Enable Masque skinning", 0, 0,
             function() return addon.db.combatTracker.masque.enabled end,
             function(val)
                 addon.db.combatTracker.masque.enabled = val
@@ -1337,32 +1450,40 @@ local function BuildCombatTrackerPanel()
             end
         )
         masqueCB:ClearAllPoints()
-        masqueCB:SetPoint("TOPLEFT", masqueLabel, "BOTTOMLEFT", 0, -8)
+        masqueCB:SetPoint("TOPLEFT", masqueContent, "TOPLEFT", 12, -2)
 
-        local masqueNote = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        masqueNote:SetPoint("TOPLEFT", masqueCB, "BOTTOMLEFT", 0, -6)
+        local masqueNote = masqueContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        masqueNote:SetPoint("TOPLEFT", masqueCB, "BOTTOMLEFT", 4, -8)
         masqueNote:SetWidth(450)
         masqueNote:SetJustifyH("LEFT")
         masqueNote:SetText("When enabled, three groups appear in the Masque addon UI under MathWroQOL: CT Racials, CT Trinkets, CT Consumables.")
+        masqueLastWidget = masqueNote
     else
-        local masqueNote = sc:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        masqueNote:SetPoint("TOPLEFT", sep3, "BOTTOMLEFT", 0, -10)
+        local masqueNote = masqueContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        masqueNote:SetPoint("TOPLEFT", masqueContent, "TOPLEFT", 12, -4)
         masqueNote:SetTextColor(0.5, 0.5, 0.5)
         masqueNote:SetText("Masque skinning: install the Masque addon to enable icon skinning.")
+        masqueLastWidget = masqueNote
     end
+    masqueCard:SetBottomWidget(masqueLastWidget, 12)
 
-    -- ── Refresh all controls on panel show ────────────────────────────────────
+    local function updateTrackerGatekeeper()
+        SetChildrenEnabled(trackerBody, addon.db.combatTracker.enabled == true)
+    end
+    enableCB:HookScript("OnClick", updateTrackerGatekeeper)
 
     panel:HookScript("OnShow", function()
         C_Timer.After(0, function()
             for _, fn in ipairs(refreshFns) do fn() end
+            updateTrackerGatekeeper()
+            racialsSection:UpdateLayout()
+            trinketsSection:UpdateLayout()
+            consumablesSection:UpdateLayout()
         end)
     end)
 
     return panel
 end
-
--- ── Registration ──────────────────────────────────────────────────────────────
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
@@ -1370,18 +1491,20 @@ frame:SetScript("OnEvent", function(self, event, arg1)
     if arg1 ~= "MathWroQOL" then return end
     self:UnregisterEvent("ADDON_LOADED")
 
-    local parentPanel   = BuildParentPanel()
-    local generalPanel  = BuildGeneralPanel()
-    local elvuiPanel    = BuildElvUIPanel()
-    local editModePanel      = BuildEditModePanel()
+    local parentPanel = BuildParentPanel()
+    local generalPanel = BuildGeneralPanel()
+    local combatLogPanel = BuildCombatLogPanel()
     local combatTrackerPanel = BuildCombatTrackerPanel()
+    local elvuiPanel = BuildElvUIPanel()
+    local editModePanel = BuildEditModePanel()
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         local parentCat = Settings.RegisterCanvasLayoutCategory(parentPanel, parentPanel.name)
-        local generalCat = Settings.RegisterCanvasLayoutSubcategory(parentCat, generalPanel,  generalPanel.name)
-        Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel,    elvuiPanel.name)
-        Settings.RegisterCanvasLayoutSubcategory(parentCat, editModePanel, editModePanel.name)
+        local generalCat = Settings.RegisterCanvasLayoutSubcategory(parentCat, generalPanel, generalPanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, combatLogPanel, combatLogPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatTrackerPanel, combatTrackerPanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel, elvuiPanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, editModePanel, editModePanel.name)
         Settings.RegisterAddOnCategory(parentCat)
 
         SLASH_MQOL1 = "/mqol"
@@ -1389,12 +1512,12 @@ frame:SetScript("OnEvent", function(self, event, arg1)
             Settings.OpenToCategory(generalCat:GetID())
         end
     else
-        -- Fallback for older API
         InterfaceOptions_AddCategory(parentPanel)
         InterfaceOptions_AddCategory(generalPanel, parentPanel)
-        InterfaceOptions_AddCategory(elvuiPanel,   parentPanel)
-        InterfaceOptions_AddCategory(editModePanel, parentPanel)
+        InterfaceOptions_AddCategory(combatLogPanel, parentPanel)
         InterfaceOptions_AddCategory(combatTrackerPanel, parentPanel)
+        InterfaceOptions_AddCategory(elvuiPanel, parentPanel)
+        InterfaceOptions_AddCategory(editModePanel, parentPanel)
 
         SLASH_MQOL1 = "/mqol"
         SlashCmdList["MQOL"] = function()

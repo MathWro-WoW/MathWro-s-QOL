@@ -122,9 +122,19 @@ end
 
 - `MakeSeparator(parent, anchor, offsetY)` between sections
 - `MakeCheckbox(parent, label, x, y, getValue, setValue)` for toggles
+- `MakeOptionRow(parent, labelText, controlFn)` for label-left / control-right rows (dropdowns, font pickers)
+- `MakeCollapsibleSection(parent, title, isExpanded)` for expandable section groups
+- `MakeCard(parent, anchor, title, description)` for top-level setting cards; returns `card, content`
 - Always `cb:ClearAllPoints()` before `cb:SetPoint(...)` on reused widgets
 - FontStrings that may wrap: set `SetWidth()` and `SetJustifyH("LEFT")`
 - Controls mutate `addon.db.<feature>` then call `addon:NotifyFeature("<name>")`
+
+### Config.lua pitfalls
+
+- **Bare Texture two-point anchoring**: A bare `Texture` with two anchor points on different edges (e.g. `TOPLEFT` + `RIGHT`) will not reliably return `GetBottom()` during initial layout — the engine defers resolution and `GetBottom()` returns nil. This breaks any code that reads bounds (like `SetBottomWidget`). Wrap in a 1px-height Frame instead; Frames resolve deferred anchors correctly.
+- **MakeSeparator** is a Frame wrapping a texture (not a bare texture) for the reason above. It uses `TOPLEFT` (anchored to the previous widget) + `RIGHT` (anchored to parent) so its width adapts to the container.
+- **MakeCard content anchoring**: The content frame inside `MakeCard` must not set both `TOPLEFT` and `TOPRIGHT` with different Y offsets — WoW averages mismatched Y values on same-edge anchors, pushing the content behind the card header. Use `TOPLEFT` for position + `RIGHT` for width constraint.
+- **MakeCollapsibleSection arrows**: Use `Soulbinds_Collection_CategoryHeader_Expand` / `Collapse` atlas textures, not Unicode characters (WoW's default fonts lack `▸`/`▾`).
 
 ### Event registration
 
