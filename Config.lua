@@ -808,7 +808,7 @@ local function BuildCombatTrackerPanel()
                     return not (addon.db.combatTracker.racials.hiddenSpells[entry.name] == true)
                 end,
                 function(val)
-                    addon.db.combatTracker.racials.hiddenSpells[entry.name] = not val or nil
+                    addon.db.combatTracker.racials.hiddenSpells[entry.name] = (not val) and true or nil
                     addon:NotifyFeature("combatTracker")
                 end
             )
