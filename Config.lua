@@ -46,67 +46,25 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     _G[sliderName .. "High"]:SetText(tostring(maxVal))
     _G[sliderName .. "Text"]:SetText("")
 
-    local input = CreateFrame("EditBox", nil, container, "BackdropTemplate")
-    input:SetFontObject("GameFontHighlightSmall")
-    input:SetTextInsets(4, 4, 0, 0)
-    input:SetSize(40, 20)
-    input:SetPoint("LEFT", slider, "RIGHT", 10, 0)
-    input:SetAutoFocus(false)
-    input:SetMaxLetters(3)
-    input:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile     = false,
-        edgeSize = 1,
-        insets   = { left=1, right=1, top=1, bottom=1 },
-    })
-    input:SetBackdropColor(0, 0, 0, 0.6)
-    input:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-    input:HookScript("OnEditFocusGained", function(self)
-        self:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
-    end)
-    input:HookScript("OnEditFocusLost", function(self)
-        self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-    end)
+    -- FontString always renders on SetText; EditBox has unfocused-repaint bugs.
+    local valueLabel = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    valueLabel:SetPoint("LEFT", slider, "RIGHT", 10, 0)
 
     local syncing = false
 
     slider:SetScript("OnValueChanged", function(self, value)
         if syncing then return end
         value = math.floor(value + 0.5)
-        syncing = true
-        input:SetText(tostring(value))
-        syncing = false
+        valueLabel:SetText(tostring(value))
         setVal(value)
     end)
-
-    local function applyInput()
-        local val = tonumber(input:GetText())
-        if not val then
-            input:SetText(tostring(math.floor(slider:GetValue() + 0.5)))
-            return
-        end
-        val = math.max(minVal, math.min(maxVal, math.floor(val + 0.5)))
-        syncing = true
-        slider:SetValue(val)
-        input:SetText(tostring(val))
-        syncing = false
-        setVal(val)
-    end
-
-    input:SetScript("OnEnterPressed", function(self) applyInput(); self:ClearFocus() end)
-    input:SetScript("OnEditFocusLost", applyInput)
 
     function container:Refresh()
         local v = getVal()
         syncing = true
         slider:SetValue(v)
-        input:SetText(tostring(v))
         syncing = false
-        -- Force EditBox to repaint: WoW won't redraw text until the frame
-        -- is shown fresh, so toggle visibility within the same frame.
-        input:Hide()
-        input:Show()
+        valueLabel:SetText(tostring(v))
     end
 
     container:Refresh()
