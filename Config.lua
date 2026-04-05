@@ -46,11 +46,28 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     _G[sliderName .. "High"]:SetText(tostring(maxVal))
     _G[sliderName .. "Text"]:SetText("")
 
-    local input = CreateFrame("EditBox", nil, container, "InputBoxTemplate")
+    local input = CreateFrame("EditBox", nil, container, "BackdropTemplate")
+    input:SetFontObject("GameFontHighlightSmall")
+    input:SetTextInsets(4, 4, 0, 0)
     input:SetSize(40, 20)
     input:SetPoint("LEFT", slider, "RIGHT", 10, 0)
     input:SetAutoFocus(false)
     input:SetMaxLetters(3)
+    input:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile     = false,
+        edgeSize = 1,
+        insets   = { left=1, right=1, top=1, bottom=1 },
+    })
+    input:SetBackdropColor(0, 0, 0, 0.6)
+    input:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    input:HookScript("OnEditFocusGained", function(self)
+        self:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
+    end)
+    input:HookScript("OnEditFocusLost", function(self)
+        self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    end)
 
     local syncing = false
 
@@ -79,7 +96,6 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
 
     input:SetScript("OnEnterPressed", function(self) applyInput(); self:ClearFocus() end)
     input:SetScript("OnEditFocusLost", applyInput)
-    input:HookScript("OnShow", function(self) self:SetText(tostring(getVal())) end)
 
     function container:Refresh()
         local v = getVal()
