@@ -701,7 +701,27 @@ local function BuildCombatTrackerPanel()
         end
     )
 
-    local sep0 = MakeSeparator(sc, enableCB, -12)
+    local resetBtn = CreateFrame("Button", nil, sc, "UIPanelButtonTemplate")
+    resetBtn:SetSize(160, 22)
+    resetBtn:SetText("Reset Positions")
+    resetBtn:ClearAllPoints()
+    resetBtn:SetPoint("TOPLEFT", enableCB, "BOTTOMLEFT", 0, -8)
+    resetBtn:SetScript("OnClick", function()
+        local defaults = {
+            racials     = { point = "CENTER", x = -220, y = 200 },
+            trinkets    = { point = "CENTER", x =    0, y = 200 },
+            consumables = { point = "CENTER", x =  220, y = 200 },
+        }
+        for key, def in pairs(defaults) do
+            local f = addon.db.combatTracker.frames[key]
+            f.point = def.point
+            f.x     = def.x
+            f.y     = def.y
+        end
+        addon:NotifyFeature("combatTracker")
+    end)
+
+    local sep0 = MakeSeparator(sc, resetBtn, -12)
 
     -- ── Helper: build a per-section block ─────────────────────────────────────
 
