@@ -2,26 +2,46 @@ local _, addon = ...
 local CT = addon.combatTracker
 
 -- ── Known consumable item IDs ─────────────────────────────────────────────────
--- These are The War Within (11.x) item IDs. Verify in-game for Midnight (12.x):
+-- Midnight (12.x) item IDs.  Verify in-game:
 --   /script local n=GetItemInfo(ITEMID); print(n)
 -- Use the options panel "Custom Items" field to add new IDs without code changes.
 local CONSUMABLE_IDS = {
     combatPotions = {
-        212265,  -- Tempered Potion
-        212264,  -- Potion of Unwavering Focus
-        212283,  -- Frontline Potion
-        212270,  -- Potion of Shocking Disclosure
+        -- Fleeting versions first — prioritised when both are in bags
+        245902,  -- Fleeting Potion of Recklessness (Rank 1)
+        245903,  -- Fleeting Potion of Recklessness (Rank 2)
+        245897,  -- Fleeting Light's Potential (Rank 1)
+        245898,  -- Fleeting Light's Potential (Rank 2)
+        241288,  -- Potion of Recklessness (Rank 1)
+        241289,  -- Potion of Recklessness (Rank 2)
+        241308,  -- Light's Potential (Rank 1)
+        241309,  -- Light's Potential (Rank 2)
     },
     healingPotions = {
-        212603,  -- Algari Healing Potion
-        212604,  -- Cavedweller's Delight
+        241304,  -- Silvermoon Health Potion (Rank 1)
+        241305,  -- Silvermoon Health Potion (Rank 2)
     },
     manaPotions = {
-        212607,  -- Algari Mana Potion
+        -- Fleeting versions first — prioritised when both are in bags
+        245916,  -- Fleeting Lightfused Mana Potion (Rank 1)
+        245917,  -- Fleeting Lightfused Mana Potion (Rank 2)
+        241300,  -- Lightfused Mana Potion (Rank 1)
+        241301,  -- Lightfused Mana Potion (Rank 2)
     },
     healthstone = {
         5512,    -- Healthstone (conjured item; shared CD tracked via spell below)
     },
+}
+
+-- Maps a regular potion item ID to its fleeting equivalent.
+-- When both are in bags, only the fleeting version is shown.
+local FLEETING_OF = {
+    [241288] = 245902,  -- Potion of Recklessness R1
+    [241289] = 245903,  -- Potion of Recklessness R2
+    [241308] = 245897,  -- Light's Potential R1
+    [241309] = 245898,  -- Light's Potential R2
+    [241300] = 245916,  -- Lightfused Mana Potion R1
+    [241301] = 245917,  -- Lightfused Mana Potion R2
 }
 -- Spell ID whose cooldown represents the Healthstone shared cooldown
 local HEALTHSTONE_CD_SPELL = 6262
@@ -114,10 +134,14 @@ function consumables:ScanBags()
     local function addFromList(idList)
         for _, id in ipairs(idList) do
             if tracked[id] then
-                if found[id] or showMissing then
+                -- Fleeting priority: skip a regular potion when its fleeting
+                -- equivalent is already in bags
+                local fleetingID = FLEETING_OF[id]
+                if fleetingID and found[fleetingID] then
+                    -- Fleeting version present — suppress the regular one
+                elseif found[id] or showMissing then
                     local f = found[id]
                     if not f then
-                        -- Try to get the actual item icon rather than a generic fallback
                         local _, _, _, _, _, _, _, _, _, itemIcon = GetItemInfo(id)
                         f = { icon = itemIcon or FALLBACK_ICON, count = 0 }
                     end
