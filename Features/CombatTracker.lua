@@ -43,35 +43,6 @@ function CT.CreateButton()
     btn._cdDuration  = nil
     btn._sectionName = nil  -- set by section when added to pool
 
-    -- Forward drag events to the host section frame so icons are draggable
-    btn:RegisterForDrag("LeftButton")
-    btn:SetScript("OnDragStart", function(self)
-        local key = self._sectionName
-        if not key then return end
-        local hostKey = CT:GetHostKey(key)
-        local frame = CT.frames[hostKey]
-        if frame then
-            self._dragFrame = frame
-            frame:StartMoving()
-        end
-    end)
-    btn:SetScript("OnDragStop", function(self)
-        local frame = self._dragFrame
-        if not frame then return end
-        self._dragFrame = nil
-        frame:StopMovingOrSizing()
-        local db = addon.db.combatTracker
-        for k, f in pairs(CT.frames) do
-            if f == frame then
-                local point, _, _, x, y = frame:GetPoint()
-                db.frames[k].point = point
-                db.frames[k].x     = math.floor(x + 0.5)
-                db.frames[k].y     = math.floor(y + 0.5)
-                break
-            end
-        end
-    end)
-
     return btn
 end
 
@@ -216,6 +187,42 @@ function CT:CreateSectionFrame(key)
         db.frames[key].y     = math.floor(y + 0.5)
     end)
 
+    -- Edit Mode overlay: shown only in Edit Mode, sits above buttons, handles drag
+    local overlay = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    overlay:SetFrameStrata("HIGH")
+    overlay:SetFrameLevel(20)
+    overlay:SetPoint("TOPLEFT",     frame, "TOPLEFT")
+    overlay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT")
+    overlay:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+        insets   = { left=1, right=1, top=1, bottom=1 },
+    })
+    overlay:SetBackdropColor(0, 0.44, 0.87, 0.25)
+    overlay:SetBackdropBorderColor(0, 0.44, 0.87, 0.9)
+    overlay:EnableMouse(true)
+    overlay:RegisterForDrag("LeftButton")
+    overlay:SetScript("OnDragStart", function(self)
+        frame:StartMoving()
+        self:SetBackdropColor(0, 0.44, 0.87, 0.5)
+    end)
+    overlay:SetScript("OnDragStop", function(self)
+        frame:StopMovingOrSizing()
+        self:SetBackdropColor(0, 0.44, 0.87, 0.25)
+        local point, _, _, x, y = frame:GetPoint()
+        db.frames[key].point = point
+        db.frames[key].x     = math.floor(x + 0.5)
+        db.frames[key].y     = math.floor(y + 0.5)
+    end)
+    overlay:Hide()
+
+    local label = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("CENTER")
+    label:SetText(key:sub(1,1):upper() .. key:sub(2))
+
+    frame.editOverlay = overlay
+
     return frame
 end
 
@@ -235,7 +242,41 @@ function CT:Initialize()
         sec:RebuildIcons()
     end
 
+    -- Hook Edit Mode enter/exit to show/hide overlays
+    if EditModeManagerFrame then
+        if EditModeManagerFrame.EnterEditMode then
+            hooksecurefunc(EditModeManagerFrame, "EnterEditMode", function()
+                self:UpdateEditOverlays(true)
+            end)
+        end
+        hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function()
+            self:UpdateEditOverlays(false)
+        end)
+        -- Apply initial state in case Edit Mode is already active on login
+        if EditModeManagerFrame:IsEditModeActive() then
+            self:UpdateEditOverlays(true)
+        end
+    end
+
     self:Apply()
+end
+
+function CT:UpdateEditOverlays(show)
+    local db = addon.db.combatTracker
+    for _, sec in ipairs(sections) do
+        local frame = self.frames[sec.name]
+        if frame and frame.editOverlay then
+            local frameDb = db.frames[sec.name]
+            local isMerged = frameDb.mergeInto
+                and frameDb.mergeInto ~= sec.name
+                and self.frames[frameDb.mergeInto] ~= nil
+            if show and db.enabled and frameDb.enabled and not isMerged then
+                frame.editOverlay:Show()
+            else
+                frame.editOverlay:Hide()
+            end
+        end
+    end
 end
 
 function CT:Apply()
