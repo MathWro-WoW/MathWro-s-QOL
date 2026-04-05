@@ -103,6 +103,10 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
         slider:SetValue(v)
         input:SetText(tostring(v))
         syncing = false
+        -- Force EditBox to repaint: WoW won't redraw text until the frame
+        -- is shown fresh, so toggle visibility within the same frame.
+        input:Hide()
+        input:Show()
     end
 
     container:Refresh()
