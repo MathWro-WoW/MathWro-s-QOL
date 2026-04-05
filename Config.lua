@@ -1,5 +1,10 @@
 local _, addon = ...
 
+local function ElvSkin()
+    if not ElvUI then return nil end
+    return ElvUI[1]:GetModule("Skins")
+end
+
 -- ── Widget helpers ────────────────────────────────────────────────────────────
 
 local function MakeSeparator(parent, anchor, offsetY)
@@ -19,6 +24,8 @@ local function MakeCheckbox(parent, label, x, y, getValue, setValue)
     cb:SetScript("OnClick", function(self)
         setValue(self:GetChecked() == true)
     end)
+    local S = ElvSkin()
+    if S then S:HandleCheckBox(cb) end
     return cb
 end
 
@@ -42,6 +49,8 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     slider:SetMinMaxValues(minVal, maxVal)
     slider:SetValueStep(1)
     slider:SetObeyStepOnDrag(true)
+    local S = ElvSkin()
+    if S then S:HandleSliderFrame(slider) end
     _G[sliderName .. "Low"]:SetText(tostring(minVal))
     _G[sliderName .. "High"]:SetText(tostring(maxVal))
     _G[sliderName .. "Text"]:SetText("")
@@ -58,6 +67,11 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     })
     displayBtn:SetBackdropColor(0, 0, 0, 0.5)
     displayBtn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    if ElvUI then
+        local E = ElvUI[1]
+        displayBtn:SetBackdropColor(unpack(E.media.backdropcolor))
+        displayBtn:SetBackdropBorderColor(unpack(E.media.bordercolor))
+    end
 
     local valueLabel = displayBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     valueLabel:SetAllPoints()
@@ -150,6 +164,11 @@ local function MakeDropdown(parent, options, getValue, setValue)
     })
     btn:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
     btn:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+    if ElvUI then
+        local E = ElvUI[1]
+        btn:SetBackdropColor(unpack(E.media.backdropcolor))
+        btn:SetBackdropBorderColor(unpack(E.media.bordercolor))
+    end
 
     local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     btnText:SetPoint("LEFT", 6, 0)
@@ -174,6 +193,11 @@ local function MakeDropdown(parent, options, getValue, setValue)
     })
     popup:SetBackdropColor(0.08, 0.08, 0.08, 0.97)
     popup:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+    if ElvUI then
+        local E = ElvUI[1]
+        popup:SetBackdropColor(unpack(E.media.backdropcolor))
+        popup:SetBackdropBorderColor(unpack(E.media.bordercolor))
+    end
     popup:Hide()
 
     local ROW_H = 20
@@ -807,6 +831,8 @@ local function BuildCombatTrackerPanel()
     local resetBtn = CreateFrame("Button", nil, sc, "UIPanelButtonTemplate")
     resetBtn:SetSize(160, 22)
     resetBtn:SetText("Reset Positions")
+    local S = ElvSkin()
+    if S then S:HandleButton(resetBtn) end
     resetBtn:ClearAllPoints()
     resetBtn:SetPoint("TOPLEFT", enableCB, "BOTTOMLEFT", 0, -8)
     resetBtn:SetScript("OnClick", function()
