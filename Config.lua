@@ -80,6 +80,7 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
 
     input:SetScript("OnEnterPressed", function(self) applyInput(); self:ClearFocus() end)
     input:SetScript("OnEditFocusLost", applyInput)
+    input:HookScript("OnShow", function(self) self:SetText(tostring(getVal())) end)
 
     function container:Refresh()
         local v = getVal()
