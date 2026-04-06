@@ -1,6 +1,7 @@
 local _, addon = ...
 
 local EditModeNudge = { name = "editModeNudge" }
+addon.editModeNudge = EditModeNudge
 addon:RegisterFeature(EditModeNudge)
 
 -- ── Nudge overlay ─────────────────────────────────────────────────────────────
@@ -51,8 +52,18 @@ local function CreateArrowButton(parent, direction)
     end)
 
     btn:SetScript("OnClick", function()
-        if selectedFrame and selectedFrame.ProcessMovementKey then
+        if not selectedFrame then return end
+        if selectedFrame.ProcessMovementKey then
             selectedFrame:ProcessMovementKey(direction)
+            EditModeNudge:UpdateCoordLabel()
+        else
+            -- LibEditMode frame: no ProcessMovementKey; offset manually
+            local amount = IsShiftKeyDown() and 10 or 1
+            local dx = (direction == "RIGHT" and amount) or (direction == "LEFT" and -amount) or 0
+            local dy = (direction == "UP"    and amount) or (direction == "DOWN" and -amount) or 0
+            local point, rel, relPoint, x, y = selectedFrame:GetPoint(1)
+            selectedFrame:ClearAllPoints()
+            selectedFrame:SetPoint(point, rel, relPoint, x + dx, y + dy)
             EditModeNudge:UpdateCoordLabel()
         end
     end)
@@ -65,15 +76,21 @@ end
 function EditModeNudge:UpdateCoordLabel()
     if not coordLabel or not selectedFrame then return end
 
-    local _, _, _, offsetX, offsetY = selectedFrame:GetPoint(1)
-    if not offsetX then
+    local centerX, centerY = selectedFrame:GetCenter()
+    if not centerX then
         coordLabel:SetText("")
         return
     end
 
+    -- Convert to screen-centre-relative coordinates
+    local screenCenterX = UIParent:GetWidth() / 2
+    local screenCenterY = UIParent:GetHeight() / 2
+    local relativeX = centerX - screenCenterX
+    local relativeY = centerY - screenCenterY
+
     coordLabel:SetFormattedText(
         "X: %.1f  Y: %.1f",
-        offsetX or 0, offsetY or 0
+        relativeX, relativeY
     )
 end
 
@@ -164,6 +181,14 @@ local function InstallHooks()
     hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function()
         DetachOverlay()
     end)
+end
+
+-- ── Public API ────────────────────────────────────────────────────────────────
+
+-- Called by external systems (e.g. CombatTracker LibEditMode hook) to attach
+-- the nudge overlay to a frame that is not a native WoW Edit Mode system frame.
+function EditModeNudge:AttachToFrame(frame)
+    AttachToSystem(frame)
 end
 
 -- ── Feature contract ──────────────────────────────────────────────────────────

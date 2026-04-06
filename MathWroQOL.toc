@@ -6,6 +6,8 @@
 ## X-Curse-Project-ID: 1482222
 ## SavedVariables: MathWroQOLDB
 
+Libs\LibStub\LibStub.lua
+Libs\LibEditMode\LibEditMode.lua
 Core.lua
 Config.lua
 Features\VehicleBar.lua
@@ -14,3 +16,7 @@ Features\CDMButton.lua
 Features\AuctionFilter.lua
 Features\CombatLog.lua
 Features\EditModeNudge.lua
+Features\CombatTracker.lua
+Features\CombatTracker_Racials.lua
+Features\CombatTracker_Trinkets.lua
+Features\CombatTracker_Consumables.lua
