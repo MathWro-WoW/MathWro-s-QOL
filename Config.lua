@@ -72,6 +72,17 @@ local function SetChildrenEnabled(container, enabled)
     end
 end
 
+local function FindScrollChildAndRecalc(startFrame)
+    local f = startFrame
+    while f do
+        if f.RecalcScrollHeight then
+            C_Timer.After(0, f.RecalcScrollHeight)
+            return
+        end
+        f = f:GetParent()
+    end
+end
+
 local function MakePanelScaffold(panel, titleText, scrollName)
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
@@ -93,8 +104,28 @@ local function MakePanelScaffold(panel, titleText, scrollName)
     end)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(530, 2600)
+    scrollChild:SetSize(530, 1)
     scrollFrame:SetScrollChild(scrollChild)
+
+    local function RecalcScrollHeight()
+        local top = scrollChild:GetTop()
+        if not top then return end
+        local lowest = top
+        for _, child in pairs({ scrollChild:GetChildren() }) do
+            if child:IsShown() then
+                local b = child:GetBottom()
+                if b and b < lowest then lowest = b end
+            end
+        end
+        local h = math.max(1, (top - lowest) + 20)
+        scrollChild:SetHeight(h)
+    end
+
+    scrollChild.RecalcScrollHeight = RecalcScrollHeight
+
+    panel:HookScript("OnShow", function()
+        C_Timer.After(0, RecalcScrollHeight)
+    end)
 
     return scrollChild
 end
@@ -454,11 +485,20 @@ local function MakeCollapsibleSection(parent, title, isExpanded)
         C_Timer.After(0, function() self:UpdateLayout() end)
     end
 
+    local function bubbleScrollRecalc()
+        FindScrollChildAndRecalc(section)
+    end
+
     function section:SetExpanded(expanded)
         self._expanded = expanded == true
         self:UpdateLayout()
         if self._expanded then
-            C_Timer.After(0, function() self:UpdateLayout() end)
+            C_Timer.After(0, function()
+                self:UpdateLayout()
+                bubbleScrollRecalc()
+            end)
+        else
+            bubbleScrollRecalc()
         end
     end
 
@@ -971,7 +1011,6 @@ local function BuildCombatTrackerPanel()
     local function MakeOptionRow(parent, labelText, controlFn)
         local row = CreateFrame("Frame", nil, parent)
         row:SetHeight(24)
-        row:SetPoint("LEFT", parent, "LEFT", 0, 0)
         row:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
 
         local lbl = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -1005,34 +1044,125 @@ local function BuildCombatTrackerPanel()
         local gated = CreateFrame("Frame", nil, content)
         gated:SetPoint("TOPLEFT", secEnabledCB, "BOTTOMLEFT", 16, -ROW_SPACING)
         gated:SetPoint("RIGHT", content, "RIGHT", -8, 0)
-        gated:SetHeight(1200)
+        gated:SetHeight(1)
 
-        -- ── Layout & Grid ──
-        local layoutRow = MakeOptionRow(gated, "Layout:", function(row)
-            local btn = MakeDropdown(row, LAYOUT_OPTIONS,
-                function() return addon.db.combatTracker.frames[key].layout end,
-                function(val) addon.db.combatTracker.frames[key].layout = val end
+        local function recalcGatedHeight()
+            local top = gated:GetTop()
+            if not top then return end
+            local lowest = top
+            for _, child in pairs({ gated:GetChildren() }) do
+                if child:IsShown() then
+                    local b = child:GetBottom()
+                    if b and b < lowest then lowest = b end
+                end
+            end
+            gated:SetHeight(math.max(1, (top - lowest) + 8))
+        end
+
+        -- ── Merge & Layout ──
+        local mergeRow, layoutRow, gridRow, growDirRow, sizeSep
+
+        local function updateLayoutVisibility()
+            local merged = (addon.db.combatTracker.frames[key].mergeInto or "none") ~= "none"
+            local isGrid = addon.db.combatTracker.frames[key].layout == "grid"
+
+            if merged then
+                layoutRow:Hide()
+                layoutRow:SetHeight(0.001)
+                gridRow:Hide()
+                gridRow:SetHeight(0.001)
+                growDirRow:Hide()
+                growDirRow:SetHeight(0.001)
+                sizeSep:ClearAllPoints()
+                sizeSep:SetPoint("RIGHT", gated, "RIGHT", 0, 0)
+                sizeSep:SetPoint("TOPLEFT", mergeRow, "BOTTOMLEFT", 0, -GROUP_SPACING)
+            else
+                layoutRow:SetHeight(24)
+                layoutRow:Show()
+                layoutRow:ClearAllPoints()
+                layoutRow:SetPoint("RIGHT", gated, "RIGHT", 0, 0)
+                layoutRow:SetPoint("TOPLEFT", mergeRow, "BOTTOMLEFT", 0, -ROW_SPACING)
+
+                if isGrid then
+                    gridRow:SetHeight(24)
+                    gridRow:Show()
+                else
+                    gridRow:Hide()
+                    gridRow:SetHeight(0.001)
+                end
+
+                growDirRow:SetHeight(24)
+                growDirRow:Show()
+                growDirRow:ClearAllPoints()
+                growDirRow:SetPoint("RIGHT", gated, "RIGHT", 0, 0)
+                growDirRow:SetPoint("TOPLEFT", isGrid and gridRow or layoutRow, "BOTTOMLEFT", 0, -ROW_SPACING)
+
+                sizeSep:ClearAllPoints()
+                sizeSep:SetPoint("RIGHT", gated, "RIGHT", 0, 0)
+                sizeSep:SetPoint("TOPLEFT", growDirRow, "BOTTOMLEFT", 0, -GROUP_SPACING)
+            end
+            C_Timer.After(0, function()
+                recalcGatedHeight()
+                section:UpdateLayout()
+                FindScrollChildAndRecalc(section)
+            end)
+        end
+
+        local mergeOptions = { { label = "Standalone", value = "none" } }
+        local sectionNames = { racials = "Racials", trinkets = "Trinkets", consumables = "Consumables" }
+        for _, other in ipairs({ "racials", "trinkets", "consumables" }) do
+            if other ~= key then
+                table.insert(mergeOptions, { label = "-> " .. sectionNames[other], value = other })
+            end
+        end
+        mergeRow = MakeOptionRow(gated, "Merge into:", function(row)
+            local btn = MakeDropdown(row, mergeOptions,
+                function()
+                    return addon.db.combatTracker.frames[key].mergeInto or "none"
+                end,
+                function(val)
+                    addon.db.combatTracker.frames[key].mergeInto = (val == "none") and nil or val
+                    updateLayoutVisibility()
+                    addon:NotifyFeature("combatTracker")
+                end
             )
             table.insert(refreshFns, function() btn:Refresh() end)
             return btn
         end)
-        layoutRow:SetPoint("TOPLEFT", gated, "TOPLEFT", 0, 0)
+        mergeRow:SetPoint("TOPLEFT", gated, "TOPLEFT", 0, 0)
+
+        layoutRow = MakeOptionRow(gated, "Layout:", function(row)
+            local btn = MakeDropdown(row, LAYOUT_OPTIONS,
+                function() return addon.db.combatTracker.frames[key].layout end,
+                function(val)
+                    addon.db.combatTracker.frames[key].layout = val
+                    updateLayoutVisibility()
+                    addon:NotifyFeature("combatTracker")
+                end
+            )
+            table.insert(refreshFns, function() btn:Refresh() end)
+            return btn
+        end)
+        layoutRow:SetPoint("TOPLEFT", mergeRow, "BOTTOMLEFT", 0, -ROW_SPACING)
 
         local COLS_OPTIONS = {}
         for i = 2, 5 do
-            table.insert(COLS_OPTIONS, { label = tostring(i) .. " cols", value = i })
+            table.insert(COLS_OPTIONS, { label = tostring(i), value = i })
         end
-        local gridRow = MakeOptionRow(gated, "Grid columns:", function(row)
+        gridRow = MakeOptionRow(gated, "Icons per row:", function(row)
             local btn = MakeDropdown(row, COLS_OPTIONS,
                 function() return addon.db.combatTracker.frames[key].gridCols end,
-                function(val) addon.db.combatTracker.frames[key].gridCols = val end
+                function(val)
+                    addon.db.combatTracker.frames[key].gridCols = val
+                    addon:NotifyFeature("combatTracker")
+                end
             )
             table.insert(refreshFns, function() btn:Refresh() end)
             return btn
         end)
         gridRow:SetPoint("TOPLEFT", layoutRow, "BOTTOMLEFT", 0, -ROW_SPACING)
 
-        local growDirRow = MakeOptionRow(gated, "Anchor direction:", function(row)
+        growDirRow = MakeOptionRow(gated, "Anchor direction:", function(row)
             local btn = MakeDropdown(row, GROW_DIR_OPTIONS,
                 function() return addon.db.combatTracker.frames[key].growDirection or "growRight" end,
                 function(val)
@@ -1045,30 +1175,10 @@ local function BuildCombatTrackerPanel()
         end)
         growDirRow:SetPoint("TOPLEFT", gridRow, "BOTTOMLEFT", 0, -ROW_SPACING)
 
-        local mergeOptions = { { label = "Standalone", value = "none" } }
-        local sectionNames = { racials = "Racials", trinkets = "Trinkets", consumables = "Consumables" }
-        for _, other in ipairs({ "racials", "trinkets", "consumables" }) do
-            if other ~= key then
-                table.insert(mergeOptions, { label = "-> " .. sectionNames[other], value = other })
-            end
-        end
-        local mergeRow = MakeOptionRow(gated, "Merge into:", function(row)
-            local btn = MakeDropdown(row, mergeOptions,
-                function()
-                    return addon.db.combatTracker.frames[key].mergeInto or "none"
-                end,
-                function(val)
-                    addon.db.combatTracker.frames[key].mergeInto = (val == "none") and nil or val
-                    addon:NotifyFeature("combatTracker")
-                end
-            )
-            table.insert(refreshFns, function() btn:Refresh() end)
-            return btn
-        end)
-        mergeRow:SetPoint("TOPLEFT", growDirRow, "BOTTOMLEFT", 0, -ROW_SPACING)
-
         -- ── Icon Size ──
-        local sizeSep = MakeSeparator(gated, mergeRow, -GROUP_SPACING)
+        sizeSep = MakeSeparator(gated, growDirRow, -GROUP_SPACING)
+
+        updateLayoutVisibility()
 
         local widthSlider = MakeSliderWithInput(gated, "Icon Width (px)", 16, 80,
             function() return addon.db.combatTracker.frames[key].iconWidth end,
@@ -1180,7 +1290,10 @@ local function BuildCombatTrackerPanel()
         table.insert(refreshFns, updateSectionGatekeeper)
 
         section:SetContentBottom(lastWidget, 10)
-        table.insert(refreshFns, function() section:UpdateLayout() end)
+        table.insert(refreshFns, function()
+            recalcGatedHeight()
+            section:UpdateLayout()
+        end)
 
         return lastWidget
     end
@@ -1452,6 +1565,7 @@ local function BuildCombatTrackerPanel()
             consumablesSection:SetContentBottom(orderSection, 10)
             C_Timer.After(0, function()
                 consumablesSection:UpdateLayout()
+                FindScrollChildAndRecalc(consumablesSection)
             end)
         end
 
