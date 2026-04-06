@@ -38,6 +38,8 @@ function CT.CreateButton()
     cd:SetAllPoints(btn)
     cd:SetDrawBling(false)
     cd:SetDrawEdge(true)
+    -- Built-in countdown text is shown by default; ApplyCooldownFont toggles it.
+    cd:SetHideCountdownNumbers(false)
     btn.cooldown = cd
 
     -- Stack count label (bottom-right; used by sections that track item quantities)
@@ -49,17 +51,6 @@ function CT.CreateButton()
     countText:Hide()
     btn.countText = countText
 
-    -- Cooldown countdown label (centered; replaces built-in CooldownFrame numbers)
-    local cdCountText = btn:CreateFontString(nil, "OVERLAY")
-    cdCountText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    cdCountText:SetPoint("CENTER", btn, "CENTER", 0, 0)
-    cdCountText:SetJustifyH("CENTER")
-    cdCountText:SetTextColor(1, 1, 1, 1)
-    cdCountText:Hide()
-    btn.cdCountText = cdCountText
-
-    btn._cdStart     = nil
-    btn._cdDuration  = nil
     btn._sectionName = nil  -- set by section when added to pool
 
     return btn
@@ -83,7 +74,9 @@ function CT:ApplySectionFont(sectionName)
 end
 
 -- Applies the section's cooldown text font/size and toggles the built-in
--- WoW countdown numbers (hidden when our custom text is enabled).
+-- WoW countdown numbers on the CooldownFrameTemplate.
+-- cdCountEnabled=true  → show countdown  → SetHideCountdownNumbers(false)
+-- cdCountEnabled=false → hide countdown  → SetHideCountdownNumbers(true)
 function CT:ApplyCooldownFont(sectionName)
     local frameDb  = addon.db.combatTracker.frames[sectionName]
     local enabled  = frameDb.cdCountEnabled ~= false
@@ -92,51 +85,12 @@ function CT:ApplyCooldownFont(sectionName)
     local sec      = sectionMap[sectionName]
     if sec then
         for _, btn in ipairs(sec.buttons) do
-            if btn.cdCountText then
-                btn.cdCountText:SetFont(font, fontSize, "OUTLINE")
-            end
-            -- Hide built-in countdown when our text is active; restore it otherwise
-            if btn.cooldown and btn.cooldown.SetHideCountdownNumbers then
-                btn.cooldown:SetHideCountdownNumbers(enabled)
-            end
-        end
-    end
-end
-
--- Formats a remaining-seconds value into a compact countdown string.
-local function FormatCooldownTime(remaining)
-    if remaining >= 3600 then
-        return string.format("%dh", math.floor(remaining / 3600))
-    elseif remaining >= 60 then
-        return string.format("%dm", math.floor(remaining / 60))
-    elseif remaining >= 10 then
-        return string.format("%d",  math.floor(remaining))
-    else
-        return string.format("%.1f", remaining)
-    end
-end
-
--- Ticked every 0.1 s; updates the custom cooldown countdown text on all buttons.
-function CT:UpdateAllCooldownTexts()
-    local now = GetTime()
-    for _, sec in ipairs(sections) do
-        local frameDb = addon.db.combatTracker.frames[sec.name]
-        local enabled = frameDb.cdCountEnabled ~= false
-        for _, btn in ipairs(sec.buttons) do
-            if btn.cdCountText and btn:IsShown() then
-                if enabled
-                    and btn._cdStart    and btn._cdStart    > 0
-                    and btn._cdDuration and btn._cdDuration > 1.5
-                then
-                    local remaining = btn._cdStart + btn._cdDuration - now
-                    if remaining > 0 then
-                        btn.cdCountText:SetText(FormatCooldownTime(remaining))
-                        btn.cdCountText:Show()
-                    else
-                        btn.cdCountText:Hide()
-                    end
-                else
-                    btn.cdCountText:Hide()
+            if btn.cooldown then
+                btn.cooldown:SetHideCountdownNumbers(not enabled)
+                -- CooldownFrameTemplate exposes the text as cooldown.cooldownText
+                local t = btn.cooldown.cooldownText
+                if t and t.SetFont then
+                    t:SetFont(font, fontSize, "OUTLINE")
                 end
             end
         end
@@ -145,20 +99,27 @@ end
 
 -- ── Shared cooldown updater ───────────────────────────────────────────────────
 
--- Guards against redundant SetCooldown calls (which reset the swipe animation).
--- Sections call this; never call CooldownFrame_Set directly in section code.
-function CT.UpdateButtonCooldown(button, start, duration)
-    start    = start    or 0
-    duration = duration or 0
-    if button._cdStart == start and button._cdDuration == duration then return end
-    button._cdStart    = start
-    button._cdDuration = duration
-    if start > 0 and duration > 1.5 then
-        CooldownFrame_Set(button.cooldown, start, duration, true)
-        button.icon:SetDesaturated(true)
+-- Sections call this to update a button's cooldown frame.
+-- start/duration from C_Spell.GetSpellCooldown are SecretWhenSpellCooldownRestricted
+-- and cannot be compared when the spell is actively on cooldown. pcall catches
+-- that; the on-cooldown SET path is handled per-section via UNIT_SPELLCAST_SUCCEEDED
+-- with clean data. The off-cooldown CLEAR path (start = 0, a plain zero) is safe.
+-- isOnGCD (NeverSecret) is the primary GCD filter; duration > 1.5 is the
+-- fallback for APIs (GetInventoryItemCooldown) that don't return isOnGCD.
+-- modRate drives haste-affected animation speed; nil defaults to 1.
+function CT.UpdateButtonCooldown(button, start, duration, modRate, isOnGCD)
+    local ok, shouldSet = pcall(function()
+        return start and start > 0 and duration and duration > 1.5 and not isOnGCD
+    end)
+    if not ok then
+        -- Values are secret (spell is actively on cooldown). The cooldown frame
+        -- was already set with clean data by the spell-cast handler; do nothing.
+        return
+    end
+    if shouldSet then
+        button.cooldown:SetCooldown(start, duration, modRate)
     else
         button.cooldown:Clear()
-        button.icon:SetDesaturated(false)
     end
 end
 
@@ -364,9 +325,6 @@ function CT:Initialize()
         sec:RebuildIcons()
     end
 
-    -- Ticker: updates custom cooldown countdown text at 10 Hz
-    C_Timer.NewTicker(0.1, function() CT:UpdateAllCooldownTexts() end)
-
     self:Apply()
 end
 
@@ -439,7 +397,6 @@ local function UnregisterButtonFromMasque(group, button)
     group:RemoveButton(button)
     -- Restore default appearance after Masque removes the skin
     button.icon:SetAllPoints(button)
-    button.icon:SetDesaturated(button._cdDuration and button._cdDuration > 1.5 or false)
 end
 
 function CT:ApplyMasque()

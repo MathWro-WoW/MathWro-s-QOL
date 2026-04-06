@@ -242,7 +242,7 @@ function consumables:ScanBags()
 
     CT:ApplySectionFont("consumables")
     CT:ApplyCooldownFont("consumables")
-    self:UpdateCooldowns()
+    C_Timer.After(0, function() self:UpdateCooldowns() end)
     CT:LayoutSection(CT:GetHostKey("consumables"))
 end
 
@@ -255,23 +255,13 @@ end
 function consumables:UpdateCooldowns()
     for _, btn in ipairs(self.buttons) do
         if btn:IsShown() and btn._itemID then
-            local start, duration
-            if btn._category == "healthstone" then
-                local info = C_Spell.GetSpellCooldown(HEALTHSTONE_CD_SPELL)
-                start    = info and info.startTime or 0
-                duration = info and info.duration  or 0
-            else
-                -- C_Item.GetItemCooldown may return a table {startTime, duration} or
-                -- raw scalars (startTime, duration) depending on the patch version.
-                local a, b = C_Item.GetItemCooldown(btn._itemID)
-                if type(a) == "table" then
-                    start    = a.startTime or 0
-                    duration = a.duration  or 0
-                else
-                    start    = a or 0
-                    duration = b or 0
-                end
-            end
+            -- Use C_Item.GetItemCooldown for all consumables including healthstone.
+            -- C_Spell.GetSpellCooldown(HEALTHSTONE_CD_SPELL) returns SecretWhenSpellCooldownRestricted
+            -- values regardless of execution context; the item API avoids this.
+            -- (AllowedWhenUntainted — safe because this runs inside C_Timer.After.)
+            local s, d, enable = C_Item.GetItemCooldown(btn._itemID)
+            local start    = enable and (s or 0) or 0
+            local duration = enable and (d or 0) or 0
             CT.UpdateButtonCooldown(btn, start, duration)
         end
     end
@@ -299,7 +289,13 @@ function consumables:Initialize()
                 self:ScanBags()
             end)
         elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" then
-            self:UpdateCooldowns()
+            if not self._cdPending then
+                self._cdPending = true
+                C_Timer.After(0, function()
+                    self._cdPending = false
+                    self:UpdateCooldowns()
+                end)
+            end
         end
     end)
 end

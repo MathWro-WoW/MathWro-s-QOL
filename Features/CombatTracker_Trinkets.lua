@@ -80,7 +80,7 @@ function trinkets:RebuildIcons()
 
     CT:ApplySectionFont("trinkets")
     CT:ApplyCooldownFont("trinkets")
-    self:UpdateCooldowns()
+    C_Timer.After(0, function() self:UpdateCooldowns() end)
     CT:LayoutSection(CT:GetHostKey("trinkets"))
 end
 
@@ -90,8 +90,13 @@ function trinkets:UpdateCooldowns()
     for _, btn in ipairs(self.buttons) do
         if btn:IsShown() and btn._slotID then
             if btn._isOnUse then
-                local start, duration = GetInventoryItemCooldown("player", btn._slotID)
-                CT.UpdateButtonCooldown(btn, start, duration)
+                -- GetInventoryItemCooldown returns start, duration, enable
+                local start, duration, enable = GetInventoryItemCooldown("player", btn._slotID)
+                if enable then
+                    CT.UpdateButtonCooldown(btn, start, duration)
+                else
+                    CT.UpdateButtonCooldown(btn, 0, 0)
+                end
             else
                 CT.UpdateButtonCooldown(btn, 0, 0)
             end
@@ -113,7 +118,13 @@ function trinkets:Initialize()
                 self:RebuildIcons()
             end
         elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" then
-            self:UpdateCooldowns()
+            if not self._cdPending then
+                self._cdPending = true
+                C_Timer.After(0, function()
+                    self._cdPending = false
+                    self:UpdateCooldowns()
+                end)
+            end
         end
     end)
 end

@@ -143,7 +143,7 @@ function racials:RebuildIcons()
 
     CT:ApplySectionFont("racials")
     CT:ApplyCooldownFont("racials")
-    self:UpdateCooldowns()
+    C_Timer.After(0, function() self:UpdateCooldowns() end)
     CT:LayoutSection(CT:GetHostKey("racials"))
 end
 
@@ -151,10 +151,28 @@ end
 function racials:UpdateCooldowns()
     for _, btn in ipairs(self.buttons) do
         if btn:IsShown() and btn._spellID then
-            local info = C_Spell.GetSpellCooldown(btn._spellID)
+            local info     = C_Spell.GetSpellCooldown(btn._spellID)
             local start    = info and info.startTime or 0
             local duration = info and info.duration  or 0
-            CT.UpdateButtonCooldown(btn, start, duration)
+            local modRate  = info and info.modRate
+            local isOnGCD  = info and info.isOnGCD
+            CT.UpdateButtonCooldown(btn, start, duration, modRate, isOnGCD)
+        end
+    end
+end
+
+-- Called when a player spell cast succeeds. Uses clean values (GetTime() +
+-- spell info base cooldown) to set the cooldown frame, bypassing the
+-- SecretWhenSpellCooldownRestricted restriction on C_Spell.GetSpellCooldown.
+function racials:OnSpellCast(spellID)
+    for _, btn in ipairs(self.buttons) do
+        if btn._spellID == spellID then
+            local info        = C_Spell.GetSpellInfo(spellID)
+            local cooldownSec = info and info.cooldownMS and (info.cooldownMS / 1000) or 0
+            if cooldownSec > 1.5 then
+                btn.cooldown:SetCooldown(GetTime(), cooldownSec)
+            end
+            break
         end
     end
 end
@@ -179,12 +197,27 @@ function racials:Initialize()
 
     self.eventFrame = CreateFrame("Frame")
     self.eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    self.eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     self.eventFrame:RegisterEvent("UNIT_ENTERED_VEHICLE")
     self.eventFrame:RegisterEvent("UNIT_EXITED_VEHICLE")
 
-    self.eventFrame:SetScript("OnEvent", function(_, event, unit)
+    self.eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
         if event == "SPELL_UPDATE_COOLDOWN" then
-            self:UpdateCooldowns()
+            -- SPELL_UPDATE_COOLDOWN is only used to CLEAR cooldown frames when a
+            -- racial expires (start = 0 is a clean zero, always comparable).
+            -- Active cooldowns are SET by UNIT_SPELLCAST_SUCCEEDED with clean data.
+            if not self._cdPending then
+                self._cdPending = true
+                C_Timer.After(0, function()
+                    self._cdPending = false
+                    self:UpdateCooldowns()
+                end)
+            end
+        elseif event == "UNIT_SPELLCAST_SUCCEEDED" and unit == "player" then
+            -- Use clean values: GetTime() for start, spell info for base duration.
+            -- C_Spell.GetSpellCooldown returns SecretWhenSpellCooldownRestricted values
+            -- so we avoid it here and derive the data from untainted sources.
+            self:OnSpellCast(spellID)
         elseif event == "UNIT_ENTERED_VEHICLE" and unit == "player" then
             -- Suppress racial frame while in vehicle
             if CT.frames["racials"] then CT.frames["racials"]:Hide() end
