@@ -107,12 +107,17 @@ end
 function trinkets:Initialize()
     local self = self
     self.eventFrame = CreateFrame("Frame")
+    self.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     self.eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
     self.eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 
     self.eventFrame:SetScript("OnEvent", function(_, event, slotID)
-        if event == "PLAYER_EQUIPMENT_CHANGED" then
+        if event == "PLAYER_ENTERING_WORLD" then
+            -- At PLAYER_LOGIN the inventory API isn't ready yet; this event fires
+            -- after all equipment data is available, giving us a reliable first scan.
+            self:RebuildIcons()
+        elseif event == "PLAYER_EQUIPMENT_CHANGED" then
             -- Only react to trinket slot changes
             if slotID == 13 or slotID == 14 then
                 self:RebuildIcons()
