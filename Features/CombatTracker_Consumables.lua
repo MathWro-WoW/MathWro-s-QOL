@@ -49,6 +49,41 @@ local HEALTHSTONE_CD_SPELL = 6262
 -- Fallback icon shown when hideIfMissing=false and item is not in bags
 local FALLBACK_ICON = 134400  -- classic potion flask icon
 
+-- Builds the default display order from enabled categories + custom items.
+-- Used to populate itemOrder when empty and by Config.lua to reset order.
+local function buildDefaultOrder(frameDb)
+    local order = {}
+    if frameDb.showCombatPotions then
+        for _, id in ipairs(CONSUMABLE_IDS.combatPotions) do
+            table.insert(order, id)
+        end
+    end
+    if frameDb.showHealingPotions then
+        for _, id in ipairs(CONSUMABLE_IDS.healingPotions) do
+            table.insert(order, id)
+        end
+    end
+    if frameDb.showManaPotions then
+        for _, id in ipairs(CONSUMABLE_IDS.manaPotions) do
+            table.insert(order, id)
+        end
+    end
+    if frameDb.showHealthstone then
+        for _, id in ipairs(CONSUMABLE_IDS.healthstone) do
+            table.insert(order, id)
+        end
+    end
+    local customIDs = {}
+    for id in pairs(frameDb.customItems or {}) do
+        table.insert(customIDs, id)
+    end
+    table.sort(customIDs)
+    for _, id in ipairs(customIDs) do
+        table.insert(order, id)
+    end
+    return order
+end
+
 local consumables = {
     name           = "consumables",
     buttons        = {},
@@ -124,60 +159,36 @@ function consumables:ScanBags()
     end
     self.cachedItems = found
 
-    -- Build ordered active list
-    -- Order: combat potions → healing potions → mana potions → healthstone → custom
+    -- Build ordered active list using saved itemOrder (or default fallback)
     local active = {}
 
-    -- hideIfMissing defaults to true (hide) when nil; only false explicitly shows missing
     local showMissing = (frameDb.hideIfMissing == false)
 
-    local function addFromList(idList)
-        for _, id in ipairs(idList) do
-            if tracked[id] then
-                -- Fleeting priority: skip a regular potion when its fleeting
-                -- equivalent is already in bags
-                local fleetingID = FLEETING_OF[id]
-                if fleetingID and found[fleetingID] then
-                    -- Fleeting version present — suppress the regular one
-                elseif found[id] or showMissing then
-                    local f = found[id]
-                    if not f then
-                        local _, _, _, _, _, _, _, _, _, itemIcon = GetItemInfo(id)
-                        f = { icon = itemIcon or FALLBACK_ICON, count = 0 }
-                    end
-                    table.insert(active, {
-                        itemID   = id,
-                        icon     = f.icon,
-                        count    = f.count,
-                        category = tracked[id],
-                    })
-                end
-            end
-        end
+    local order = frameDb.itemOrder
+    if not order or #order == 0 then
+        order = buildDefaultOrder(frameDb)
     end
 
-    if frameDb.showCombatPotions  then addFromList(CONSUMABLE_IDS.combatPotions)  end
-    if frameDb.showHealingPotions then addFromList(CONSUMABLE_IDS.healingPotions) end
-    if frameDb.showManaPotions    then addFromList(CONSUMABLE_IDS.manaPotions)    end
-    if frameDb.showHealthstone    then addFromList(CONSUMABLE_IDS.healthstone)    end
-
-    -- Custom items in sorted order
-    local customIDs = {}
-    for id in pairs(frameDb.customItems or {}) do table.insert(customIDs, id) end
-    table.sort(customIDs)
-    for _, id in ipairs(customIDs) do
-        if found[id] or showMissing then
-            local f = found[id]
-            if not f then
-                local _, _, _, _, _, _, _, _, _, itemIcon = GetItemInfo(id)
-                f = { icon = itemIcon or FALLBACK_ICON, count = 0 }
+    local added = {}
+    for _, id in ipairs(order) do
+        if tracked[id] and not added[id] then
+            local fleetingID = FLEETING_OF[id]
+            if fleetingID and found[fleetingID] then
+                -- Fleeting version present — suppress the regular one
+            elseif found[id] or showMissing then
+                local f = found[id]
+                if not f then
+                    local _, _, _, _, _, _, _, _, _, itemIcon = GetItemInfo(id)
+                    f = { icon = itemIcon or FALLBACK_ICON, count = 0 }
+                end
+                table.insert(active, {
+                    itemID   = id,
+                    icon     = f.icon,
+                    count    = f.count,
+                    category = tracked[id],
+                })
+                added[id] = true
             end
-            table.insert(active, {
-                itemID   = id,
-                icon     = f.icon,
-                count    = f.count,
-                category = "custom",
-            })
         end
     end
 
@@ -292,5 +303,9 @@ function consumables:Initialize()
         end
     end)
 end
+
+consumables.BuildDefaultOrder = buildDefaultOrder
+consumables.CONSUMABLE_IDS    = CONSUMABLE_IDS
+consumables.FLEETING_OF       = FLEETING_OF
 
 CT:RegisterSection(consumables)

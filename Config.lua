@@ -432,12 +432,11 @@ local function MakeCollapsibleSection(parent, title, isExpanded)
     section._contentHeight = 1
 
     function section:UpdateLayout()
-        if self._expanded and self._contentBottomWidget and content:GetTop() and self._contentBottomWidget:GetBottom() then
-            self._contentHeight = math.max(10, (content:GetTop() - self._contentBottomWidget:GetBottom()) + self._contentBottomPadding)
-        end
-
         if self._expanded then
             content:Show()
+            if self._contentBottomWidget and content:GetTop() and self._contentBottomWidget:GetBottom() then
+                self._contentHeight = math.max(10, (content:GetTop() - self._contentBottomWidget:GetBottom()) + self._contentBottomPadding)
+            end
             content:SetHeight(self._contentHeight)
             self:SetHeight(HEADER_H + self._contentHeight + 12)
             arrow:SetAtlas("Soulbinds_Collection_CategoryHeader_Collapse", false)
@@ -458,6 +457,9 @@ local function MakeCollapsibleSection(parent, title, isExpanded)
     function section:SetExpanded(expanded)
         self._expanded = expanded == true
         self:UpdateLayout()
+        if self._expanded then
+            C_Timer.After(0, function() self:UpdateLayout() end)
+        end
     end
 
     header:SetScript("OnClick", function()
@@ -1314,76 +1316,268 @@ local function BuildCombatTrackerPanel()
         hsCB:ClearAllPoints()
         hsCB:SetPoint("TOPLEFT", manaCB, "TOPLEFT", 200, 0)
 
-        local customLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        customLabel:SetPoint("TOPLEFT", manaCB, "BOTTOMLEFT", 4, -14)
-        customLabel:SetText("Custom Items — enter an item ID and press Add:")
+        -- ── Item Display Order (nested collapsible) ──
+        local orderSection = MakeCollapsibleSection(parent, "Item Display Order", false)
+        orderSection:ClearAllPoints()
+        orderSection:SetPoint("TOPLEFT", manaCB, "BOTTOMLEFT", -8, -GROUP_SPACING)
+        orderSection:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
 
-        local idBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+        local orderContent = orderSection.content
+
+        local resetBtn = CreateFrame("Button", nil, orderContent, "UIPanelButtonTemplate")
+        resetBtn:SetSize(80, 20)
+        resetBtn:SetText("Reset Order")
+        local Sc = ElvSkin()
+        if Sc then Sc:HandleButton(resetBtn) end
+        resetBtn:SetPoint("TOPLEFT", orderContent, "TOPLEFT", 0, 0)
+
+        local orderListFrame = CreateFrame("Frame", nil, orderContent)
+        orderListFrame:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 0, -6)
+        orderListFrame:SetPoint("RIGHT", orderContent, "RIGHT", 0, 0)
+        orderListFrame:SetHeight(10)
+
+        -- ── Custom Item Input ──
+        local customLabel = orderContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        customLabel:SetPoint("TOPLEFT", orderListFrame, "BOTTOMLEFT", 0, -14)
+        customLabel:SetText("Add custom item — enter an item ID and press Add:")
+
+        local idBox = CreateFrame("EditBox", nil, orderContent, "InputBoxTemplate")
         idBox:SetSize(80, 20)
         idBox:SetNumeric(true)
         idBox:SetAutoFocus(false)
         idBox:SetMaxLetters(10)
         idBox:SetPoint("TOPLEFT", customLabel, "BOTTOMLEFT", 0, -6)
 
-        local addBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        local addBtn = CreateFrame("Button", nil, orderContent, "UIPanelButtonTemplate")
         addBtn:SetSize(60, 22)
         addBtn:SetText("Add")
-        local Sc = ElvSkin()
-        if Sc then Sc:HandleButton(addBtn) end
+        local Sc2 = ElvSkin()
+        if Sc2 then Sc2:HandleButton(addBtn) end
         addBtn:SetPoint("LEFT", idBox, "RIGHT", 6, 1)
 
-        local itemListFrame = CreateFrame("Frame", nil, parent)
-        itemListFrame:SetPoint("TOPLEFT", idBox, "BOTTOMLEFT", 0, -6)
-        itemListFrame:SetSize(420, 10)
+        -- Bottom sentinel for height calculation
+        local orderBottom = CreateFrame("Frame", nil, orderContent)
+        orderBottom:SetPoint("TOPLEFT", idBox, "BOTTOMLEFT", 0, -4)
+        orderBottom:SetSize(1, 1)
 
-        local itemRowPool = {}
+        local orderRowPool = {}
 
-        local function RebuildItemList()
-            for _, r in ipairs(itemRowPool) do r:Hide() end
+        local function getConsumablesSec()
+            return addon.combatTracker
+                and addon.combatTracker.sections
+                and addon.combatTracker.sections.consumables
+        end
 
-            local ci = addon.db.combatTracker.frames.consumables.customItems or {}
-            local ids = {}
-            for id in pairs(ci) do table.insert(ids, id) end
-            table.sort(ids)
+        local function getItemRank(id)
+            local _, itemLink = GetItemInfo(id)
+            if itemLink then
+                local rank = C_TradeSkillUI.GetItemCraftedQualityByItemInfo(itemLink)
+                if rank then return rank end
+            end
+            return C_TradeSkillUI.GetItemCraftedQualityByItemInfo(id)
+        end
+
+        local function getItemCategory(id)
+            local consumablesSec = getConsumablesSec()
+            if not consumablesSec then return nil, getItemRank(id) end
+            local IDS = consumablesSec.CONSUMABLE_IDS
+            for i, cid in ipairs(IDS.combatPotions or {}) do
+                if cid == id then return "Combat Potion", (i % 2 == 1) and 1 or 2 end
+            end
+            for i, cid in ipairs(IDS.healingPotions or {}) do
+                if cid == id then return "Healing Potion", (i % 2 == 1) and 1 or 2 end
+            end
+            for i, cid in ipairs(IDS.manaPotions or {}) do
+                if cid == id then return "Mana Potion", (i % 2 == 1) and 1 or 2 end
+            end
+            for _, cid in ipairs(IDS.healthstone or {}) do
+                if cid == id then return "Healthstone", nil end
+            end
+            return "Custom", getItemRank(id)
+        end
+
+        local function ensureItemOrder()
+            local frameDb = addon.db.combatTracker.frames.consumables
+            if not frameDb.itemOrder or #frameDb.itemOrder == 0 then
+                local sec = getConsumablesSec()
+                if sec and sec.BuildDefaultOrder then
+                    frameDb.itemOrder = sec.BuildDefaultOrder(frameDb)
+                end
+            end
+            return frameDb.itemOrder or {}
+        end
+
+        local function syncItemOrder()
+            local frameDb = addon.db.combatTracker.frames.consumables
+            local order = frameDb.itemOrder or {}
+
+            local tracked = {}
+            local sec = getConsumablesSec()
+            if sec and sec.CONSUMABLE_IDS then
+                local IDS = sec.CONSUMABLE_IDS
+                if frameDb.showCombatPotions then
+                    for _, id in ipairs(IDS.combatPotions) do tracked[id] = true end
+                end
+                if frameDb.showHealingPotions then
+                    for _, id in ipairs(IDS.healingPotions) do tracked[id] = true end
+                end
+                if frameDb.showManaPotions then
+                    for _, id in ipairs(IDS.manaPotions) do tracked[id] = true end
+                end
+                if frameDb.showHealthstone then
+                    for _, id in ipairs(IDS.healthstone) do tracked[id] = true end
+                end
+            end
+            for id in pairs(frameDb.customItems or {}) do
+                tracked[id] = true
+            end
+
+            local existing = {}
+            for _, id in ipairs(order) do existing[id] = true end
+
+            local pruned = {}
+            for _, id in ipairs(order) do
+                if tracked[id] then table.insert(pruned, id) end
+            end
+
+            for id in pairs(tracked) do
+                if not existing[id] then table.insert(pruned, id) end
+            end
+
+            frameDb.itemOrder = pruned
+            return pruned
+        end
+
+        local function updateParentHeight()
+            consumablesSection:SetContentBottom(orderSection, 10)
+            C_Timer.After(0, function()
+                consumablesSection:UpdateLayout()
+            end)
+        end
+
+        local function updateOrderSectionHeight()
+            orderSection:SetContentBottom(orderBottom, 4)
+            C_Timer.After(0, function()
+                orderSection:UpdateLayout()
+                updateParentHeight()
+                C_Timer.After(0, function()
+                    orderSection:UpdateLayout()
+                    updateParentHeight()
+                end)
+            end)
+        end
+
+        local function RebuildOrderList()
+            for _, r in ipairs(orderRowPool) do r:Hide() end
+
+            local order = ensureItemOrder()
+            order = syncItemOrder()
 
             local ROW_H = 28
             local prevRow
-            for idx, id in ipairs(ids) do
-                local row = itemRowPool[idx]
+            for idx, id in ipairs(order) do
+                local row = orderRowPool[idx]
                 if not row then
-                    row = CreateFrame("Frame", nil, itemListFrame)
+                    row = CreateFrame("Frame", nil, orderListFrame)
                     row:SetHeight(ROW_H)
-                    row:SetWidth(420)
+
+                    local bg = row:CreateTexture(nil, "BACKGROUND")
+                    bg:SetAllPoints()
+                    bg:SetColorTexture(1, 1, 1, 0.03)
+                    row.bg = bg
 
                     local iconTex = row:CreateTexture(nil, "ARTWORK")
-                    iconTex:SetSize(24, 24)
-                    iconTex:SetPoint("LEFT", 0, 0)
+                    iconTex:SetSize(22, 22)
+                    iconTex:SetPoint("LEFT", 4, 0)
                     iconTex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
                     row.iconTex = iconTex
 
-                    local nameFStr = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                    nameFStr:SetPoint("LEFT", 30, 0)
-                    nameFStr:SetPoint("RIGHT", -28, 0)
-                    nameFStr:SetJustifyH("LEFT")
-                    row.nameFStr = nameFStr
-
                     local removeBtn = CreateFrame("Button", nil, row)
                     removeBtn:SetSize(22, 22)
-                    removeBtn:SetPoint("RIGHT", 0, 0)
+                    removeBtn:SetPoint("RIGHT", row, "RIGHT", -2, 0)
                     local xt = removeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
                     xt:SetAllPoints()
-                    xt:SetText("×")
+                    xt:SetText("\195\151")
                     xt:SetTextColor(0.8, 0.3, 0.3, 1)
                     row.removeBtn = removeBtn
+                    row.removeTxt = xt
 
-                    table.insert(itemRowPool, row)
+                    local useElvUI = ElvUI and ElvUI[1] and ElvUI[1].Media and ElvUI[1].Media.Textures
+
+                    local downBtn = CreateFrame("Button", nil, row)
+                    downBtn:SetSize(18, 18)
+                    downBtn:SetPoint("RIGHT", removeBtn, "LEFT", 2, -5)
+                    local downTex = downBtn:CreateTexture(nil, "ARTWORK")
+                    downTex:SetAllPoints()
+                    if useElvUI then
+                        downTex:SetTexture(ElvUI[1].Media.Textures.ArrowUp)
+                        downTex:SetRotation(3.14159)
+                    else
+                        downTex:SetAtlas("common-icon-arrow-down")
+                    end
+                    downBtn.tex = downTex
+                    downBtn.useElvUI = useElvUI
+                    downBtn:SetScript("OnEnter", function(self)
+                        self.tex:SetVertexColor(1, 0.82, 0, 1)
+                    end)
+                    downBtn:SetScript("OnLeave", function(self)
+                        self.tex:SetVertexColor(1, 1, 1, 1)
+                    end)
+                    row.downBtn = downBtn
+
+                    local upBtn = CreateFrame("Button", nil, row)
+                    upBtn:SetSize(18, 18)
+                    upBtn:SetPoint("RIGHT", removeBtn, "LEFT", 2, 5)
+                    local upTex = upBtn:CreateTexture(nil, "ARTWORK")
+                    upTex:SetAllPoints()
+                    if useElvUI then
+                        upTex:SetTexture(ElvUI[1].Media.Textures.ArrowUp)
+                    else
+                        upTex:SetAtlas("common-icon-arrow-up")
+                    end
+                    upBtn.tex = upTex
+                    upBtn:SetScript("OnEnter", function(self)
+                        self.tex:SetVertexColor(1, 0.82, 0, 1)
+                    end)
+                    upBtn:SetScript("OnLeave", function(self)
+                        self.tex:SetVertexColor(1, 1, 1, 1)
+                    end)
+                    row.upBtn = upBtn
+
+                    local catFStr = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+                    catFStr:SetPoint("RIGHT", downBtn, "LEFT", -4, 4)
+                    catFStr:SetWidth(90)
+                    catFStr:SetJustifyH("RIGHT")
+                    row.catFStr = catFStr
+
+                    local rankTex = row:CreateTexture(nil, "OVERLAY")
+                    rankTex:SetSize(14, 14)
+                    rankTex:SetPoint("RIGHT", catFStr, "LEFT", -2, 0)
+                    row.rankTex = rankTex
+
+                    local nameFStr = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    nameFStr:SetPoint("LEFT", iconTex, "RIGHT", 6, 0)
+                    nameFStr:SetPoint("RIGHT", rankTex, "LEFT", -4, 0)
+                    nameFStr:SetJustifyH("LEFT")
+                    nameFStr:SetWordWrap(false)
+                    nameFStr:SetNonSpaceWrap(false)
+                    row.nameFStr = nameFStr
+
+                    table.insert(orderRowPool, row)
                 end
 
                 row:ClearAllPoints()
                 if prevRow then
-                    row:SetPoint("TOPLEFT", prevRow, "BOTTOMLEFT", 0, -2)
+                    row:SetPoint("TOPLEFT", prevRow, "BOTTOMLEFT", 0, -1)
                 else
-                    row:SetPoint("TOPLEFT", itemListFrame, "TOPLEFT", 0, 0)
+                    row:SetPoint("TOPLEFT", orderListFrame, "TOPLEFT", 0, 0)
+                end
+                row:SetPoint("RIGHT", orderListFrame, "RIGHT", 0, 0)
+
+                if idx % 2 == 0 then
+                    row.bg:SetColorTexture(1, 1, 1, 0.05)
+                else
+                    row.bg:SetColorTexture(1, 1, 1, 0.02)
                 end
 
                 local itemName, _, _, _, _, _, _, _, _, itemIcon = GetItemInfo(id)
@@ -1395,20 +1589,71 @@ local function BuildCombatTrackerPanel()
                 end
                 row.nameFStr:SetText(itemName or ("Item #" .. id))
 
+                local cat, rank = getItemCategory(id)
+                row.catFStr:SetText(cat or "")
+
+                if rank then
+                    row.rankTex:SetAtlas("Professions-Icon-Quality-12-Tier" .. rank .. "-Small", true)
+                    row.rankTex:Show()
+                else
+                    row.rankTex:Hide()
+                end
+
+                local isCustom = (cat == "Custom")
+                if isCustom then
+                    row.removeBtn:Show()
+                    row.removeTxt:Show()
+                else
+                    row.removeBtn:Hide()
+                    row.removeTxt:Hide()
+                end
+
+                local capturedIdx = idx
                 local capturedID = id
+                row.upBtn:SetScript("OnClick", function()
+                    if capturedIdx <= 1 then return end
+                    local o = addon.db.combatTracker.frames.consumables.itemOrder
+                    o[capturedIdx], o[capturedIdx - 1] = o[capturedIdx - 1], o[capturedIdx]
+                    addon:NotifyFeature("combatTracker")
+                    RebuildOrderList()
+                end)
+                row.downBtn:SetScript("OnClick", function()
+                    local o = addon.db.combatTracker.frames.consumables.itemOrder
+                    if capturedIdx >= #o then return end
+                    o[capturedIdx], o[capturedIdx + 1] = o[capturedIdx + 1], o[capturedIdx]
+                    addon:NotifyFeature("combatTracker")
+                    RebuildOrderList()
+                end)
                 row.removeBtn:SetScript("OnClick", function()
                     addon.db.combatTracker.frames.consumables.customItems[capturedID] = nil
+                    local o = addon.db.combatTracker.frames.consumables.itemOrder
+                    table.remove(o, capturedIdx)
                     addon:NotifyFeature("combatTracker")
-                    RebuildItemList()
+                    RebuildOrderList()
                 end)
+
+                row.upBtn:SetShown(idx > 1)
+                row.downBtn:SetShown(idx < #order)
 
                 row:Show()
                 prevRow = row
             end
 
-            itemListFrame:SetHeight(math.max(#ids * (ROW_H + 2), 10))
-            consumablesSection:SetContentBottom(itemListFrame, 10)
+            local listH = math.max(#order * (ROW_H + 1), 10)
+            orderListFrame:SetHeight(listH)
+
+            updateOrderSectionHeight()
         end
+
+        resetBtn:SetScript("OnClick", function()
+            local sec = getConsumablesSec()
+            if sec and sec.BuildDefaultOrder then
+                local frameDb = addon.db.combatTracker.frames.consumables
+                frameDb.itemOrder = sec.BuildDefaultOrder(frameDb)
+                addon:NotifyFeature("combatTracker")
+                RebuildOrderList()
+            end
+        end)
 
         addBtn:SetScript("OnClick", function()
             local id = tonumber(idBox:GetText())
@@ -1416,20 +1661,43 @@ local function BuildCombatTrackerPanel()
                 addon.db.combatTracker.frames.consumables.customItems[id] = true
                 idBox:SetText("")
                 idBox:ClearFocus()
+                local o = addon.db.combatTracker.frames.consumables.itemOrder
+                if o then table.insert(o, id) end
                 addon:NotifyFeature("combatTracker")
-                RebuildItemList()
+                RebuildOrderList()
             end
         end)
         idBox:SetScript("OnEnterPressed", function() addBtn:Click() end)
 
+        local function onCategoryToggle()
+            syncItemOrder()
+            addon:NotifyFeature("combatTracker")
+            RebuildOrderList()
+        end
+        combatCB:HookScript("OnClick", onCategoryToggle)
+        healCB:HookScript("OnClick", onCategoryToggle)
+        manaCB:HookScript("OnClick", onCategoryToggle)
+        hsCB:HookScript("OnClick", onCategoryToggle)
+
         local infoFrame = CreateFrame("Frame")
         infoFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
         infoFrame:SetScript("OnEvent", function()
-            if itemListFrame:IsVisible() then RebuildItemList() end
+            if orderListFrame:IsVisible() then RebuildOrderList() end
         end)
 
-        table.insert(refreshFns, RebuildItemList)
-        return itemListFrame
+        table.insert(refreshFns, function()
+            if orderSection._expanded then
+                RebuildOrderList()
+            end
+        end)
+        orderSection.header:HookScript("OnClick", function()
+            if orderSection._expanded then
+                RebuildOrderList()
+            else
+                updateParentHeight()
+            end
+        end)
+        return orderSection
     end)
 
     local masqueCard, masqueContent = MakeCard(

@@ -79,6 +79,7 @@ local defaults = {
                 showManaPotions = true,
                 showHealthstone = true,
                 customItems = {},
+                itemOrder = {},
                 stackCountEnabled  = true,
                 stackCountFontSize = 12,
                 stackCountFont     = "Fonts\\FRIZQT__.TTF",

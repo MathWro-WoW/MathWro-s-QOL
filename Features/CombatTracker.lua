@@ -9,8 +9,9 @@ local CT = {
     sections = sectionMap,
     frames   = {},   -- { [name] = Frame }
 }
--- Expose as addon.combatTracker so section files can reference it at load time
+-- Expose as addon.combatTracker so section files and Config.lua can reference it
 addon.combatTracker = CT
+CT.sections = sectionMap
 
 -- ── Section registry ──────────────────────────────────────────────────────────
 
