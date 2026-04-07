@@ -4,5 +4,6 @@ curse-id: 1482222
 ignore:
   - .pkgmeta
   - .github
+  - AGENTS.md
   - CLAUDE.md
   - docs
