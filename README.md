@@ -26,7 +26,7 @@ Automatically starts and stops combat logging based on instance type. Supports d
 ### Combat Tracker
 
 **Racials, Trinkets & Consumables**
-Displays icon bars for racial abilities, equipped trinkets, and consumable items (combat potions, healing potions, mana potions, healthstones). Each section tracks cooldowns with swipe animations and optional countdown text. Consumables show stack counts from your inventory.
+Displays icon bars for racial abilities, equipped trinkets, and consumable items (combat potions, healing potions, mana potions, healthstones). Each section tracks cooldowns with swipe animations and optional countdown text. Consumables show stack counts from your inventory. Individual racial abilities can be hidden via the options panel. When both a regular and fleeting version of a consumable are in your bags, only the fleeting version is shown.
 
 **Layout & Positioning**
 Each section can be positioned independently via Edit Mode (LibEditMode integration) or merged into another section's bar. Layout options include horizontal row, vertical column, and grid with configurable icons-per-row. Anchor direction controls growth direction.
@@ -37,7 +37,7 @@ Per-section icon width and height sliders. Stack counter and cooldown countdown 
 ### Edit Mode
 
 **Edit Mode Nudge**
-Adds arrow buttons and a coordinate readout when an Edit Mode frame is selected. Nudge frames by 1px in any direction. Coordinates display the frame's position relative to screen centre.
+Adds arrow buttons and a coordinate readout when an Edit Mode frame is selected. Nudge frames by 1px per click, or 10px with Shift held. Coordinates display the frame's position relative to screen centre.
 
 ### ElvUI Plugins *(requires ElvUI)*
 
