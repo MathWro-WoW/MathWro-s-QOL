@@ -115,9 +115,13 @@ function racials:RebuildIcons()
     end
 
     -- Grow pool if needed (pool never shrinks)
+    local hostKey = CT:GetHostKey(self.name)
+    local frameW  = addon.db.combatTracker.frames[hostKey].iconWidth
+    local frameH  = addon.db.combatTracker.frames[hostKey].iconHeight
     while #self.buttons < #active do
         local btn = CT.CreateButton()
         btn._sectionName = self.name
+        btn:SetSize(frameW, frameH)  -- pre-size before Masque registers the button
         -- Register with Masque if active
         if mg and addon.db.combatTracker.masque.enabled and mg[self.name] then
             CT._registerButtonMasque(mg[self.name], btn)
