@@ -166,13 +166,13 @@ function racials:UpdateCooldowns()
 end
 
 -- Called when a player spell cast succeeds. Uses clean values (GetTime() +
--- spell info base cooldown) to set the cooldown frame, bypassing the
+-- GetSpellBaseCooldown) to set the cooldown frame, bypassing the
 -- SecretWhenSpellCooldownRestricted restriction on C_Spell.GetSpellCooldown.
 function racials:OnSpellCast(spellID)
     for _, btn in ipairs(self.buttons) do
         if btn._spellID == spellID then
-            local info        = C_Spell.GetSpellInfo(spellID)
-            local cooldownSec = info and info.cooldownMS and (info.cooldownMS / 1000) or 0
+            local cooldownMS  = GetSpellBaseCooldown(spellID)
+            local cooldownSec = cooldownMS and (cooldownMS / 1000) or 0
             if cooldownSec > 1.5 then
                 btn.cooldown:SetCooldown(GetTime(), cooldownSec)
             end

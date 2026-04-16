@@ -324,7 +324,11 @@ end)
 
 1. **Only call `SetCooldown()` when state actually changes.** Cache `(start, duration)` per button; skip if unchanged — calling it unconditionally resets the swipe animation mid-cycle causing visible jitter.
 2. **Call `Clear()` when the cooldown ends**, not `SetCooldown(0, 0)`.
-3. **`SecretWhenSpellCooldownRestricted`**: `C_Spell.GetSpellCooldown()` can return a restricted sentinel value in some states (e.g. during certain vehicle transitions). Use `pcall` when reading it, or prefer `C_Item.GetItemCooldown()` for items. For spell cooldown *setting*, use clean data from `UNIT_SPELLCAST_SUCCEEDED` instead.
+3. **`SecretWhenSpellCooldownRestricted`**: `C_Spell.GetSpellCooldown()` returns restricted sentinel values during combat. Comparing them (e.g. `start > 0`) raises a Lua error. Strategies by context:
+   - **Items/inventory**: Use `C_Item.GetItemCooldown()` or `GetInventoryItemCooldown()` — unrestricted.
+   - **Spells (setting on cast)**: In `UNIT_SPELLCAST_SUCCEEDED`, use `GetTime()` for start and `GetSpellBaseCooldown(spellID)` for base duration in ms. Do **not** use `C_Spell.GetSpellInfo(spellID).cooldownMS` — that field does not exist (see pitfalls below).
+   - **Spells (clearing on expiry)**: `SPELL_UPDATE_COOLDOWN` fires when cooldown ends; `start` is `0` (a plain zero, not secret) so the clear path works.
+   - **Fallback guard**: Wrap reads in `pcall`; if it errors, the spell is actively on cooldown and was already set by the cast handler.
 
 ```lua
 local function UpdateCooldown(button, start, duration)
@@ -356,5 +360,6 @@ end
 - **`AB:PLAYER_ENTERING_WORLD`**: Does NOT call `UpdateButtonSettings` — state drivers are only re-registered during `AB:Initialize()` and explicit `Apply()` calls.
 - **Vehicle-like state detection**: `HasOverrideActionBar() or HasVehicleActionBar() or IsPossessBarVisible() or UnitExists("vehicle")`. Override-bar shapeshifts trigger `HasOverrideActionBar()` but NOT `UNIT_ENTERED_VEHICLE`.
 - **Inventory API availability**: `GetInventoryItemID()` and related calls are not reliable at `PLAYER_LOGIN`. Use `PLAYER_ENTERING_WORLD` instead (see `CombatTracker_Trinkets.lua`).
+- **`C_Spell.GetSpellInfo()` has no cooldown field**: The `SpellInfo` struct only contains `name`, `iconID`, `originalIconID`, `castTime`, `minRange`, `maxRange`, `spellID`, `rank`. There is no `cooldownMS`. To get a spell's base cooldown, use `GetSpellBaseCooldown(spellID)` which returns `cooldownMS, gcdMS` (both in milliseconds, unrestricted).
 - **ElvUI skinning game menu button**: Apply via `hooksecurefunc(GameMenuFrame, "InitButtons", fn)` → `E:GetModule("Skins"):HandleButton(btn, nil, nil, nil, true)`. Guard with a `IsSkinned` flag to avoid re-skinning.
 - **Lazy frame creation**: Prefer `local function EnsureWidget()` pattern for UI that may never be needed. Named globals get the `MathWroQOL_` prefix and explicit `FrameStrata`/`FrameLevel`.
