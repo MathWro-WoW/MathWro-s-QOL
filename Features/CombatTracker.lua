@@ -121,6 +121,12 @@ function CT.UpdateButtonCooldown(button, start, duration, modRate, isOnGCD)
     else
         button.cooldown:Clear()
     end
+
+    local sec = button._sectionName
+    if sec then
+        local desaturate = shouldSet and addon.db.combatTracker.frames[sec].desaturateOnCD
+        button.icon:SetDesaturated(desaturate == true)
+    end
 end
 
 -- ── Merge helper ──────────────────────────────────────────────────────────────

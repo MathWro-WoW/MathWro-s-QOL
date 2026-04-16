@@ -175,6 +175,9 @@ function racials:OnSpellCast(spellID)
             local cooldownSec = cooldownMS and (cooldownMS / 1000) or 0
             if cooldownSec > 1.5 then
                 btn.cooldown:SetCooldown(GetTime(), cooldownSec)
+                if addon.db.combatTracker.frames.racials.desaturateOnCD then
+                    btn.icon:SetDesaturated(true)
+                end
             end
             break
         end

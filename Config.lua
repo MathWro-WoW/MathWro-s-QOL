@@ -1276,10 +1276,23 @@ local function BuildCombatTrackerPanel()
         end)
         cdFontRow:SetPoint("TOPLEFT", cdFontSizeSlider, "BOTTOMLEFT", 0, -ROW_SPACING)
 
+        -- ── Desaturate on Cooldown ──
+        local desatSep = MakeSeparator(gated, cdFontRow, -GROUP_SPACING)
+
+        local desatCB = MakeCheckbox(gated, "Desaturate icon on cooldown", 0, 0,
+            function() return addon.db.combatTracker.frames[key].desaturateOnCD == true end,
+            function(val)
+                addon.db.combatTracker.frames[key].desaturateOnCD = val
+                addon:NotifyFeature("combatTracker")
+            end
+        )
+        desatCB:ClearAllPoints()
+        desatCB:SetPoint("TOPLEFT", desatSep, "BOTTOMLEFT", 0, -GROUP_SPACING)
+
         -- ── Extra + Gatekeeper ──
-        local lastWidget = cdFontRow
+        local lastWidget = desatCB
         if extraFn then
-            local extraSep = MakeSeparator(gated, cdFontRow, -GROUP_SPACING)
+            local extraSep = MakeSeparator(gated, desatCB, -GROUP_SPACING)
             lastWidget = extraFn(gated, extraSep) or extraSep
         end
 
