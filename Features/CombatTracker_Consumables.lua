@@ -29,6 +29,7 @@ local CONSUMABLE_IDS = {
         241301,  -- Lightfused Mana Potion (Rank 2)
     },
     healthstone = {
+        224464,  -- Demonic Healthstone (shares healthstone CD)
         5512,    -- Healthstone (conjured item; shared CD tracked via spell below)
     },
 }
@@ -167,6 +168,15 @@ function consumables:ScanBags()
     local order = frameDb.itemOrder
     if not order or #order == 0 then
         order = buildDefaultOrder(frameDb)
+        frameDb.itemOrder = order
+    else
+        --  Append any tracked IDs missing from saved order (covers addon updates
+        --  that introduce new built-in IDs like Demonic Healthstone).
+        local inOrder = {}
+        for _, id in ipairs(order) do inOrder[id] = true end
+        for id in pairs(tracked) do
+            if not inOrder[id] then table.insert(order, id) end
+        end
     end
 
     local added = {}
