@@ -148,10 +148,10 @@ end
 
 local function refreshFrame(frame)
     if not frame or not frame.Health then return end
-    if frame.Health.ForceUpdate then
+    if frame.UpdateAllElements then
+        frame:UpdateAllElements("ElvUI_UpdateAllElements")
+    elseif frame.Health.ForceUpdate then
         frame.Health:ForceUpdate()
-    elseif frame.UpdateAllElements then
-        frame:UpdateAllElements("MathWroQOL_AtonementHealthColor")
     end
 end
 
