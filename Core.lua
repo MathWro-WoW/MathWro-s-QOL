@@ -5,7 +5,7 @@ addon.features = {}
 
 local defaults = {
     vehicleBar = {
-        enabled = true,
+        enabled = false,
         bars = { [1] = true },
     },
     atonementHealthColor = {
@@ -21,7 +21,7 @@ local defaults = {
         },
     },
     cdmButton = {
-        enabled = true,
+        enabled = false,
         slashWA = true,
         slashCM = true,
     },
@@ -38,7 +38,7 @@ local defaults = {
         maxLevelOnly = false,
     },
     editModeNudge = {
-        enabled = true,
+        enabled = false,
     },
     combatTracker = {
         enabled = false,
