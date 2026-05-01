@@ -44,6 +44,9 @@ Adds arrow buttons and a coordinate readout when an Edit Mode frame is selected.
 **Vehicle Bar Visibility**
 Keep selected action bars (1–10) visible during vehicle combat and override bar states (e.g. shapeshift-style encounters). Prevents ElvUI's mouseover fade from hiding bars for the duration of the encounter, and restores normal fade behaviour on exit. By default only bar 1 is enabled — enable additional bars in the options panel.
 
+**Atonement Health Color**
+Recolor selected ElvUI unit frame health bars while units have Discipline Priest Atonement. Supports player, target, party, and all ElvUI raid frame sizes with a user-selectable color and sensible default. Options are visible whenever ElvUI is loaded, while runtime aura tracking only runs for priests.
+
 ## Slash Commands
 
 | Command | Description |
