@@ -8,6 +8,18 @@ local defaults = {
         enabled = true,
         bars = { [1] = true },
     },
+    atonementHealthColor = {
+        enabled = false,
+        color = { r = 0.95, g = 0.72, b = 0.22 },
+        frames = {
+            player = false,
+            target = false,
+            party  = true,
+            raid1  = true,
+            raid2  = true,
+            raid3  = true,
+        },
+    },
     cdmButton = {
         enabled = true,
         slashWA = true,

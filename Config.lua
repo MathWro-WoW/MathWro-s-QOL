@@ -199,6 +199,67 @@ local function MakeCheckbox(parent, label, x, y, getValue, setValue)
     return cb
 end
 
+local function MakeColorSwatch(parent, label, getColor, setColor)
+    local container = CreateFrame("Frame", nil, parent)
+    container:SetSize(260, 28)
+
+    local lbl = container:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    lbl:SetPoint("LEFT", container, "LEFT", 0, 0)
+    lbl:SetText(label)
+
+    local swatch = CreateFrame("Button", nil, container, "BackdropTemplate")
+    swatch:SetSize(34, 20)
+    swatch:SetPoint("LEFT", lbl, "RIGHT", 12, 0)
+    ApplyFrameBackdrop(swatch, false)
+
+    local fill = swatch:CreateTexture(nil, "ARTWORK")
+    fill:SetPoint("TOPLEFT", swatch, "TOPLEFT", 3, -3)
+    fill:SetPoint("BOTTOMRIGHT", swatch, "BOTTOMRIGHT", -3, 3)
+    swatch.fill = fill
+
+    function swatch:Refresh()
+        local c = getColor() or {}
+        fill:SetColorTexture(c.r or 1, c.g or 1, c.b or 1, 1)
+    end
+
+    swatch:SetScript("OnClick", function(self)
+        local c = getColor() or {}
+        local oldR, oldG, oldB = c.r or 1, c.g or 1, c.b or 1
+
+        local function commitColor()
+            local r, g, b = ColorPickerFrame:GetColorRGB()
+            setColor({ r = r, g = g, b = b })
+            self:Refresh()
+        end
+
+        local function cancelColor()
+            setColor({ r = oldR, g = oldG, b = oldB })
+            self:Refresh()
+        end
+
+        if ColorPickerFrame.SetupColorPickerAndShow then
+            ColorPickerFrame:SetupColorPickerAndShow({
+                r = oldR,
+                g = oldG,
+                b = oldB,
+                hasOpacity = false,
+                swatchFunc = commitColor,
+                cancelFunc = cancelColor,
+            })
+        else
+            ColorPickerFrame.func = commitColor
+            ColorPickerFrame.cancelFunc = cancelColor
+            ColorPickerFrame.hasOpacity = false
+            ColorPickerFrame:SetColorRGB(oldR, oldG, oldB)
+            ColorPickerFrame:Show()
+        end
+    end)
+
+    swatch:Refresh()
+    container.swatch = swatch
+    return container
+end
+
 local _sliderCount = 0
 local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal)
     _sliderCount = _sliderCount + 1
@@ -866,9 +927,111 @@ local function BuildElvUIPanel()
 
     card:SetBottomWidget(barsContainer, 10)
 
+    local atonementCard, atonementContent = MakeCard(
+        sc,
+        card,
+        "Atonement Health Color",
+        "Recolor selected ElvUI unit frame health bars while the unit has Discipline Priest Atonement. Missing Atonement keeps normal ElvUI health coloring."
+    )
+
+    local atonementEnableCB = MakeCheckbox(atonementContent, "Enable", 0, 0,
+        function()
+            return addon.db.atonementHealthColor and addon.db.atonementHealthColor.enabled == true
+        end,
+        function(val)
+            if addon.db.atonementHealthColor then
+                addon.db.atonementHealthColor.enabled = val
+                addon:NotifyFeature("atonementHealthColor")
+            end
+        end
+    )
+    atonementEnableCB:ClearAllPoints()
+    atonementEnableCB:SetPoint("TOPLEFT", atonementContent, "TOPLEFT", 12, -2)
+
+    local atonementOptions = CreateFrame("Frame", nil, atonementContent)
+    atonementOptions:SetPoint("TOPLEFT", atonementEnableCB, "BOTTOMLEFT", 20, -8)
+    atonementOptions:SetSize(430, 166)
+
+    local frameLabel = atonementOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    frameLabel:SetPoint("TOPLEFT", atonementOptions, "TOPLEFT", 0, 0)
+    frameLabel:SetText("Frames to recolor:")
+
+    local frameOptions = {
+        { key = "player", label = "Player" },
+        { key = "target", label = "Target" },
+        { key = "party",  label = "Party" },
+        { key = "raid1",  label = "Raid 1" },
+        { key = "raid2",  label = "Raid 2" },
+        { key = "raid3",  label = "Raid 3" },
+    }
+
+    local frameRefs = {}
+    for i, opt in ipairs(frameOptions) do
+        local cb = MakeCheckbox(atonementOptions, opt.label, 0, 0,
+            function()
+                local db = addon.db.atonementHealthColor
+                return db and db.frames and db.frames[opt.key] == true
+            end,
+            function(val)
+                local db = addon.db.atonementHealthColor
+                if db and db.frames then
+                    db.frames[opt.key] = val == true
+                    addon:NotifyFeature("atonementHealthColor")
+                end
+            end
+        )
+        cb:ClearAllPoints()
+        if i == 1 then
+            cb:SetPoint("TOPLEFT", frameLabel, "BOTTOMLEFT", -4, -6)
+        elseif i == 4 then
+            cb:SetPoint("TOPLEFT", frameRefs[1], "BOTTOMLEFT", 0, -4)
+        else
+            cb:SetPoint("TOPLEFT", frameRefs[i - 1], "TOPLEFT", 96, 0)
+        end
+        frameRefs[i] = cb
+    end
+
+    local colorSwatch = MakeColorSwatch(atonementOptions, "Atonement color",
+        function()
+            local db = addon.db.atonementHealthColor
+            return db and db.color
+        end,
+        function(color)
+            local db = addon.db.atonementHealthColor
+            if db then
+                db.color = color
+                addon:NotifyFeature("atonementHealthColor")
+            end
+        end
+    )
+    colorSwatch:SetPoint("TOPLEFT", frameRefs[4], "BOTTOMLEFT", 4, -10)
+
+    local dandersNote = atonementOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    dandersNote:SetPoint("TOPLEFT", colorSwatch, "BOTTOMLEFT", 0, -10)
+    dandersNote:SetWidth(410)
+    dandersNote:SetJustifyH("LEFT")
+    dandersNote:SetTextColor(0.68, 0.68, 0.68)
+    dandersNote:SetText("DandersFrames users can create the same behavior in DandersFrames Aura Designer with Atonement spell ID 194384 and a Health Bar Color effect.")
+
+    local function updateAtonementGatekeeper()
+        local enabled = addon.db.atonementHealthColor and addon.db.atonementHealthColor.enabled == true
+        SetChildrenEnabled(atonementOptions, enabled)
+        if colorSwatch.swatch then colorSwatch.swatch:Refresh() end
+    end
+    atonementEnableCB:HookScript("OnClick", updateAtonementGatekeeper)
+
+    if not elvuiLoaded then
+        atonementEnableCB:Disable()
+        atonementEnableCB:SetAlpha(0.4)
+        SetChildrenEnabled(atonementOptions, false)
+    end
+
+    atonementCard:SetBottomWidget(dandersNote, 12)
+
     panel:HookScript("OnShow", function()
         if elvuiLoaded then
             updateVehicleGatekeeper()
+            updateAtonementGatekeeper()
         end
     end)
 
