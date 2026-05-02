@@ -78,6 +78,8 @@ function MyFeature:Apply()
 end
 ```
 
+Every feature must have a top-level `enabled = false` default in `Core.lua` unless there is a documented reason to ship it on. Treat `enabled` as a hard execution gate: `Initialize()`, `Apply()`, event handlers, hooks, timers, and helper callbacks must return before doing feature work when `addon.db.<featureName>.enabled` is false. Disabled features may keep only the inert registration needed to notice settings changes or required early Blizzard addon events; they must not scan state, update frames, register recurring timers, or process gameplay events while disabled.
+
 Features that have no lifecycle needs (e.g. `AuctionFilter`, `CombatLog`) may have no-op or absent `Initialize()`/`Apply()` and instead register event frames at file top level — see [Event Registration](#event-registration).
 
 ---
@@ -88,7 +90,7 @@ Four surfaces to wire:
 
 1. Create `Features/MyFeature.lua` with the feature contract above
 2. Add `Features\MyFeature.lua` to `MathWroQOL.toc` (use backslash path separator in TOC)
-3. Add default values to the `defaults` table in `Core.lua`
+3. Add default values to the `defaults` table in `Core.lua`, including top-level `enabled = false`
 4. Add UI controls to the correct panel function in `Config.lua`
 
 ---
