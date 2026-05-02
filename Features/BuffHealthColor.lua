@@ -314,14 +314,6 @@ local function applyBuffColor(healthBar, unit)
     else
         healthBar:SetStatusBarColor(r, g, b)
     end
-
-    if healthBar.bg and healthBar.bg.SetVertexColor then
-        healthBar.bg:SetVertexColor(r, g, b)
-    end
-
-    if healthBar.backdrop and healthBar.backdrop.SetBackdropColor then
-        healthBar.backdrop:SetBackdropColor(r, g, b)
-    end
 end
 
 local function debugPrint(message)
