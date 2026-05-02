@@ -112,7 +112,7 @@ Four surfaces to wire:
 | Auction Filter | `AuctionFilter.lua` | `auctionFilter` | Pre-enables AH filters on open |
 | Combat Log | `CombatLog.lua` | `combatLog` | Auto-starts/stops combat logging by instance type and level cap |
 | Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Arrow buttons + coordinate display for Edit Mode frames |
-| Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring for configured buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs |
+| Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring for configured player-cast buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs. Each buff profile has frame, color, and specialization filters. Built-ins expose only relevant class specs; custom IDs infer spec filters from the player spellbook when possible |
 | Combat Tracker | `CombatTracker.lua` + 3 section files | `combatTracker` | Cooldown icon display system (racials, trinkets, consumables) |
 
 ---

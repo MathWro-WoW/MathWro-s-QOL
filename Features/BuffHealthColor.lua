@@ -17,31 +17,49 @@ local DEFAULT_BUFFS = {
         label = "Atonement",
         spellID = 194384,
         color = { r = 0.95, g = 0.72, b = 0.22 },
+        allSpecs = false,
+        specs = { [256] = true },
+        validSpecs = { [256] = true },
     },
     lifebloom = {
         label = "Lifebloom",
         spellID = 33763,
         color = { r = 0.20, g = 0.85, b = 0.25 },
+        allSpecs = false,
+        specs = { [105] = true },
+        validSpecs = { [105] = true },
     },
     prayerOfMending = {
         label = "Prayer of Mending",
         spellID = 41635,
         color = { r = 0.95, g = 0.88, b = 0.42 },
+        allSpecs = false,
+        specs = { [257] = true },
+        validSpecs = { [256] = true, [257] = true },
     },
     riptide = {
         label = "Riptide",
         spellID = 61295,
         color = { r = 0.16, g = 0.62, b = 0.95 },
+        allSpecs = false,
+        specs = { [264] = true },
+        validSpecs = { [264] = true },
     },
     beaconOfTheSavior = {
         label = "Beacon of the Savior",
         spellID = 1244893,
         color = { r = 1.00, g = 0.78, b = 0.50 },
+        allSpecs = false,
+        specs = { [65] = true },
+        validSpecs = { [65] = true },
     },
     renewingMist = {
         label = "Renewing Mist",
         spellID = 448430,
         color = { r = 0.35, g = 0.92, b = 0.70 },
+        allSpecs = false,
+        specs = { [270] = true },
+        validSpecs = { [270] = true },
     },
 }
 
@@ -62,10 +80,12 @@ local GetAuraDataByIndex = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
 local isSecretValue = issecretvalue or function() return false end
 
 local eventFrames = {}
+local specEventFrame
 local hookedHealthBars = setmetatable({}, { __mode = "k" })
 local refreshPending = {}
 local hooksRegistered = false
 local scanExistingHealthBars
+local registerEvents
 
 local function copyColor(color, fallback)
     color = color or fallback or {}
@@ -88,6 +108,14 @@ local function copyFrames(frames)
     }
 end
 
+local function copySpecs(specs)
+    local copy = {}
+    for specID, enabled in pairs(specs or {}) do
+        copy[tonumber(specID) or specID] = enabled == true
+    end
+    return copy
+end
+
 local function getDb()
     return addon.db and addon.db.buffHealthColor
 end
@@ -100,11 +128,16 @@ local function ensureProfileDefaults(profile, key)
         if not profile.spellID then profile.spellID = default.spellID end
         if not profile.color then profile.color = copyColor(default.color) end
         if not profile.frames then profile.frames = copyFrames(DEFAULT_FRAMES) end
+        if profile.allSpecs == nil then profile.allSpecs = default.allSpecs == true end
+        if not profile.specs then profile.specs = copySpecs(default.specs) end
+        profile.validSpecs = copySpecs(default.validSpecs)
     else
         if profile.enabled == nil then profile.enabled = true end
         if not profile.label then profile.label = "Spell " .. tostring(profile.spellID or key) end
         if not profile.color then profile.color = copyColor(DEFAULT_BUFFS.atonement.color) end
         if not profile.frames then profile.frames = copyFrames(DEFAULT_FRAMES) end
+        if profile.allSpecs == nil then profile.allSpecs = true end
+        if not profile.specs then profile.specs = {} end
     end
 end
 
@@ -212,6 +245,33 @@ local function unitHasBuff(unit, spellID)
     return false
 end
 
+local function getCurrentSpecID()
+    if not GetSpecialization or not GetSpecializationInfo then return nil end
+
+    local specIndex = GetSpecialization()
+    if not specIndex then return nil end
+
+    local specID = GetSpecializationInfo(specIndex)
+    return tonumber(specID)
+end
+
+local function profileMatchesCurrentSpec(profile)
+    if not profile then return false end
+    local specID = getCurrentSpecID()
+    if not specID then return true end
+
+    if profile.validSpecs and not (profile.validSpecs[specID] == true or profile.validSpecs[tostring(specID)] == true) then
+        return false
+    end
+
+    if not profile.validSpecs and profile.allSpecs == true then return true end
+
+    local specs = profile.specs
+    if type(specs) ~= "table" then return true end
+
+    return specs[specID] == true or specs[tostring(specID)] == true
+end
+
 local function forEachProfile(db, callback)
     for _, key in ipairs(BUILTIN_BUFF_ORDER) do
         local profile = db.buffs and db.buffs[key]
@@ -231,7 +291,7 @@ local function findMatchingProfile(db, healthBar, unit)
     local matchedProfile
     forEachProfile(db, function(_, profile)
         local spellID = tonumber(profile.spellID)
-        if profile.enabled and spellID and isSelectedFrame(profile, frame, unit) and unitHasBuff(unit, spellID) then
+        if profile.enabled and spellID and profileMatchesCurrentSpec(profile) and isSelectedFrame(profile, frame, unit) and unitHasBuff(unit, spellID) then
             matchedProfile = profile
             return true
         end
@@ -354,6 +414,8 @@ local function printDebugForUnit(unit)
 
     if not db then return end
 
+    debugPrint("currentSpecID=" .. tostring(getCurrentSpecID() or "none"))
+
     forEachProfile(db, function(_, profile)
         if not profile.enabled then return end
 
@@ -361,7 +423,7 @@ local function printDebugForUnit(unit)
         if spellID then
             local aura = getAuraDebug(unit, spellID)
             local sources = #aura.sources > 0 and table.concat(aura.sources, ",") or "none"
-            debugPrint((profile.label or tostring(spellID)) .. " spellID=" .. spellID .. " auraAny=" .. boolText(aura.any) .. " playerCast=" .. boolText(aura.player) .. " sources=" .. sources)
+            debugPrint((profile.label or tostring(spellID)) .. " spellID=" .. spellID .. " specMatch=" .. boolText(profileMatchesCurrentSpec(profile)) .. " auraAny=" .. boolText(aura.any) .. " playerCast=" .. boolText(aura.player) .. " sources=" .. sources)
         end
     end)
 
@@ -491,17 +553,36 @@ local function unregisterEvents()
         frame:SetScript("OnEvent", nil)
         eventFrames[unit] = nil
     end
+
+    if specEventFrame then
+        specEventFrame:UnregisterAllEvents()
+        specEventFrame:SetScript("OnEvent", nil)
+    end
 end
 
-local function registerEvents()
+local function registerSpecEvent()
+    if not specEventFrame then
+        specEventFrame = CreateFrame("Frame")
+    end
+
+    specEventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    specEventFrame:SetScript("OnEvent", function()
+        registerEvents()
+        refreshAll()
+    end)
+end
+
+registerEvents = function()
     unregisterEvents()
 
     local db = ensureDbShape()
     if not db or not db.enabled then return end
 
+    registerSpecEvent()
+
     local selected = {}
     forEachProfile(db, function(_, profile)
-        if not profile.enabled then return end
+        if not profile.enabled or not profileMatchesCurrentSpec(profile) then return end
         local frames = profile.frames or {}
         selected.player = selected.player or frames.player
         selected.target = selected.target or frames.target

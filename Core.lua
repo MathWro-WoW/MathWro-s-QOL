@@ -17,6 +17,9 @@ local defaults = {
                 label = "Atonement",
                 spellID = 194384,
                 color = { r = 0.95, g = 0.72, b = 0.22 },
+                allSpecs = false,
+                specs = { [256] = true },
+                validSpecs = { [256] = true },
                 frames = {
                     player = false,
                     target = false,
@@ -31,6 +34,9 @@ local defaults = {
                 label = "Lifebloom",
                 spellID = 33763,
                 color = { r = 0.20, g = 0.85, b = 0.25 },
+                allSpecs = false,
+                specs = { [105] = true },
+                validSpecs = { [105] = true },
                 frames = {
                     player = false,
                     target = false,
@@ -45,6 +51,9 @@ local defaults = {
                 label = "Prayer of Mending",
                 spellID = 41635,
                 color = { r = 0.95, g = 0.88, b = 0.42 },
+                allSpecs = false,
+                specs = { [257] = true },
+                validSpecs = { [256] = true, [257] = true },
                 frames = {
                     player = false,
                     target = false,
@@ -59,6 +68,9 @@ local defaults = {
                 label = "Riptide",
                 spellID = 61295,
                 color = { r = 0.16, g = 0.62, b = 0.95 },
+                allSpecs = false,
+                specs = { [264] = true },
+                validSpecs = { [264] = true },
                 frames = {
                     player = false,
                     target = false,
@@ -73,6 +85,9 @@ local defaults = {
                 label = "Beacon of the Savior",
                 spellID = 1244893,
                 color = { r = 1.00, g = 0.78, b = 0.50 },
+                allSpecs = false,
+                specs = { [65] = true },
+                validSpecs = { [65] = true },
                 frames = {
                     player = false,
                     target = false,
@@ -87,6 +102,9 @@ local defaults = {
                 label = "Renewing Mist",
                 spellID = 448430,
                 color = { r = 0.35, g = 0.92, b = 0.70 },
+                allSpecs = false,
+                specs = { [270] = true },
+                validSpecs = { [270] = true },
                 frames = {
                     player = false,
                     target = false,

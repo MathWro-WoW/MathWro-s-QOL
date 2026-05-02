@@ -1006,7 +1006,7 @@ local function BuildElvUIPanel()
 
     local buffOptions = CreateFrame("Frame", nil, buffContent)
     buffOptions:SetPoint("TOPLEFT", buffEnableCB, "BOTTOMLEFT", 20, -8)
-    buffOptions:SetSize(430, 260)
+    buffOptions:SetSize(430, 330)
 
     local buffOrder = {
         "atonement",
@@ -1040,6 +1040,43 @@ local function BuildElvUIPanel()
         beaconOfTheSavior = { r = 1.00, g = 0.78, b = 0.50 },
         renewingMist = { r = 0.35, g = 0.92, b = 0.70 },
     }
+    local defaultSpecs = {
+        atonement = { [256] = true },
+        lifebloom = { [105] = true },
+        prayerOfMending = { [257] = true },
+        riptide = { [264] = true },
+        beaconOfTheSavior = { [65] = true },
+        renewingMist = { [270] = true },
+    }
+    local healerSpecChoices = {
+        { specID = 256, label = "Discipline Priest" },
+        { specID = 257, label = "Holy Priest" },
+        { specID = 65, label = "Holy Paladin" },
+        { specID = 105, label = "Restoration Druid" },
+        { specID = 264, label = "Restoration Shaman" },
+        { specID = 270, label = "Mistweaver Monk" },
+    }
+    local specChoicesByBuff = {
+        atonement = {
+            { specID = 256, label = "Discipline Priest" },
+        },
+        lifebloom = {
+            { specID = 105, label = "Restoration Druid" },
+        },
+        prayerOfMending = {
+            { specID = 256, label = "Discipline Priest" },
+            { specID = 257, label = "Holy Priest" },
+        },
+        riptide = {
+            { specID = 264, label = "Restoration Shaman" },
+        },
+        beaconOfTheSavior = {
+            { specID = 65, label = "Holy Paladin" },
+        },
+        renewingMist = {
+            { specID = 270, label = "Mistweaver Monk" },
+        },
+    }
 
     local function copyFrames(frames)
         frames = frames or {}
@@ -1060,6 +1097,93 @@ local function BuildElvUIPanel()
             g = color.g or 1,
             b = color.b or 1,
         }
+    end
+
+    local function copySpecs(specs)
+        local copy = {}
+        for specID, enabled in pairs(specs or {}) do
+            copy[tonumber(specID) or specID] = enabled == true
+        end
+        return copy
+    end
+
+    local function specTableHasValues(specs)
+        if type(specs) ~= "table" then return false end
+        for _, enabled in pairs(specs) do
+            if enabled == true then return true end
+        end
+        return false
+    end
+
+    local function getCurrentSpecID()
+        if not GetSpecialization or not GetSpecializationInfo then return nil end
+
+        local specIndex = GetSpecialization()
+        if not specIndex then return nil end
+
+        return tonumber(GetSpecializationInfo(specIndex))
+    end
+
+    local function getSpecChoicesFromTable(specs)
+        local choices = {}
+        for _, option in ipairs(healerSpecChoices) do
+            if specs[option.specID] == true or specs[tostring(option.specID)] == true then
+                table.insert(choices, option)
+            end
+        end
+        return choices
+    end
+
+    local function getSpecChoices(key, profile)
+        if specChoicesByBuff[key] then return specChoicesByBuff[key], false end
+
+        if profile and specTableHasValues(profile.validSpecs) then
+            return getSpecChoicesFromTable(profile.validSpecs), false
+        end
+
+        local choices = { { specID = 0, label = "All specs" } }
+        for _, option in ipairs(healerSpecChoices) do
+            table.insert(choices, option)
+        end
+        return choices, true
+    end
+
+    local function inferCustomSpellSpecs(spellID)
+        local inferred = {}
+        local spellBook = C_SpellBook
+        local currentSpecID = getCurrentSpecID()
+
+        if spellBook and spellBook.GetNumSpellBookSkillLines and spellBook.GetSpellBookSkillLineInfo and spellBook.GetSpellBookItemInfo then
+            local numLines = spellBook.GetNumSpellBookSkillLines()
+            for lineIndex = 1, numLines do
+                local lineInfo = spellBook.GetSpellBookSkillLineInfo(lineIndex)
+                if lineInfo then
+                    local lineSpecID = tonumber(lineInfo.offSpecID) or currentSpecID
+                    local startIndex = (lineInfo.itemIndexOffset or 0) + 1
+                    local endIndex = (lineInfo.itemIndexOffset or 0) + (lineInfo.numSpellBookItems or 0)
+                    for slotIndex = startIndex, endIndex do
+                        local item = spellBook.GetSpellBookItemInfo(slotIndex, Enum.SpellBookSpellBank.Player)
+                        if item and tonumber(item.spellID) == spellID and lineSpecID then
+                            inferred[lineSpecID] = true
+                        elseif item and item.itemType == Enum.SpellBookItemType.Flyout and GetFlyoutInfo and GetFlyoutSlotInfo then
+                            local _, _, flyoutNumSlots = GetFlyoutInfo(item.actionID)
+                            for flyoutSlot = 1, flyoutNumSlots or 0 do
+                                local flyoutSpellID, _, _, _, slotSpecID = GetFlyoutSlotInfo(item.actionID, flyoutSlot)
+                                if tonumber(flyoutSpellID) == spellID then
+                                    inferred[tonumber(slotSpecID) or lineSpecID] = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if not specTableHasValues(inferred) and IsPlayerSpell and IsPlayerSpell(spellID) and currentSpecID then
+            inferred[currentSpecID] = true
+        end
+
+        return inferred
     end
 
     local function getSpellLabel(spellID)
@@ -1100,6 +1224,10 @@ local function BuildElvUIPanel()
             profile.spellID = profile.spellID or builtinSpellIDs[key]
             profile.color = profile.color or copyColor(defaultColors[key])
             profile.frames = profile.frames or copyFrames()
+            if profile.allSpecs == nil then profile.allSpecs = false end
+            if not profile.specs then profile.specs = copySpecs(defaultSpecs[key]) end
+            profile.validSpecs = copySpecs(defaultSpecs[key])
+            if key == "prayerOfMending" then profile.validSpecs[256] = true end
         end
 
         for _, key in ipairs(db.customOrder) do
@@ -1109,6 +1237,9 @@ local function BuildElvUIPanel()
                 profile.label = profile.label or ("Spell " .. tostring(profile.spellID or key))
                 profile.color = profile.color or copyColor(defaultColors.atonement)
                 profile.frames = profile.frames or copyFrames()
+                if profile.allSpecs == nil then profile.allSpecs = true end
+                if not profile.specs then profile.specs = {} end
+                if profile.validSpecs ~= nil and not specTableHasValues(profile.validSpecs) then profile.validSpecs = nil end
             end
         end
 
@@ -1167,11 +1298,16 @@ local function BuildElvUIPanel()
     selectorLabel:SetText("Buff profile:")
 
     local profileEnableCB
+    local profileAllSpecsCB
     local colorSwatch
     local spellInfo
     local removeBtn
     local frameRefs = {}
     local frameCheckboxes = {}
+    local specCheckboxes = {}
+    local specRefs = {}
+    local specFixedText
+    local refreshSpecControls = function() end
     local buffSelector
 
     local function refreshProfileControls()
@@ -1186,6 +1322,7 @@ local function BuildElvUIPanel()
         for key, cb in pairs(frameCheckboxes) do
             cb:SetChecked(profile.frames and profile.frames[key] == true)
         end
+        refreshSpecControls(db.selectedBuff, profile)
         if colorSwatch and colorSwatch.swatch then colorSwatch.swatch:Refresh() end
         if spellInfo then
             spellInfo:SetText("Spell ID: " .. tostring(profile.spellID or ""))
@@ -1253,12 +1390,17 @@ local function BuildElvUIPanel()
 
         local key = "custom:" .. tostring(spellID)
         if not db.buffs[key] then
+            local inferredSpecs = inferCustomSpellSpecs(spellID)
+            local inferred = specTableHasValues(inferredSpecs)
             db.buffs[key] = {
                 enabled = true,
                 label = getSpellLabel(spellID) or ("Spell " .. tostring(spellID)),
                 spellID = spellID,
                 color = copyColor(defaultColors.atonement),
                 frames = copyFrames(),
+                allSpecs = not inferred,
+                specs = inferred and copySpecs(inferredSpecs) or {},
+                validSpecs = inferred and copySpecs(inferredSpecs) or nil,
             }
             table.insert(db.customOrder, key)
         end
@@ -1315,8 +1457,23 @@ local function BuildElvUIPanel()
     spellInfo:SetPoint("LEFT", profileEnableCB.Text, "RIGHT", 18, 0)
     spellInfo:SetTextColor(0.68, 0.68, 0.68)
 
+    colorSwatch = MakeColorSwatch(buffOptions, "Buff color",
+        function()
+            local profile = getSelectedProfile()
+            return profile and profile.color
+        end,
+        function(color)
+            local profile = getSelectedProfile()
+            if profile then
+                profile.color = color
+                addon:NotifyFeature("buffHealthColor")
+            end
+        end
+    )
+    colorSwatch:SetPoint("TOPLEFT", profileEnableCB, "BOTTOMLEFT", 4, -10)
+
     local frameLabel = buffOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    frameLabel:SetPoint("TOPLEFT", profileEnableCB, "BOTTOMLEFT", 4, -10)
+    frameLabel:SetPoint("TOPLEFT", colorSwatch, "BOTTOMLEFT", 0, -10)
     frameLabel:SetText("Frames to recolor:")
 
     local frameOptions = {
@@ -1354,24 +1511,108 @@ local function BuildElvUIPanel()
         frameCheckboxes[opt.key] = cb
     end
 
-    colorSwatch = MakeColorSwatch(buffOptions, "Buff color",
-        function()
-            local profile = getSelectedProfile()
-            return profile and profile.color
-        end,
-        function(color)
-            local profile = getSelectedProfile()
-            if profile then
-                profile.color = color
+    local specLabel = buffOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    specLabel:SetPoint("TOPLEFT", frameRefs[4], "BOTTOMLEFT", 4, -10)
+    specLabel:SetText("Specs to load in:")
+
+    specFixedText = buffOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    specFixedText:SetPoint("TOPLEFT", specLabel, "BOTTOMLEFT", 0, -8)
+    specFixedText:SetWidth(420)
+    specFixedText:SetJustifyH("LEFT")
+    specFixedText:SetTextColor(0.68, 0.68, 0.68)
+    specFixedText:Hide()
+
+    local allSpecOptions = {
+        { specID = 0, label = "All specs" },
+        { specID = 256, label = "Discipline Priest" },
+        { specID = 257, label = "Holy Priest" },
+        { specID = 65, label = "Holy Paladin" },
+        { specID = 105, label = "Restoration Druid" },
+        { specID = 264, label = "Restoration Shaman" },
+        { specID = 270, label = "Mistweaver Monk" },
+    }
+
+    for _, opt in ipairs(allSpecOptions) do
+        local cb = MakeCheckbox(buffOptions, opt.label, 0, 0,
+            function()
+                local profile = getSelectedProfile()
+                if not profile then return false end
+                if opt.specID == 0 then
+                    return profile.allSpecs == true
+                end
+                return profile.specs and (profile.specs[opt.specID] == true or profile.specs[tostring(opt.specID)] == true)
+            end,
+            function(val)
+                local profile = getSelectedProfile()
+                if not profile then return end
+
+                if opt.specID == 0 then
+                    profile.allSpecs = val == true
+                else
+                    if type(profile.specs) ~= "table" then profile.specs = {} end
+                    profile.specs[opt.specID] = val == true or nil
+                    profile.allSpecs = false
+                    if profileAllSpecsCB then profileAllSpecsCB:SetChecked(false) end
+                end
+
                 addon:NotifyFeature("buffHealthColor")
             end
+        )
+        cb:ClearAllPoints()
+        cb:Hide()
+
+        specRefs[opt.specID] = cb
+        if opt.specID == 0 then
+            profileAllSpecsCB = cb
+        else
+            specCheckboxes[opt.specID] = cb
         end
-    )
-    colorSwatch:SetPoint("TOPLEFT", frameRefs[4], "BOTTOMLEFT", 4, -10)
+    end
+
+    refreshSpecControls = function(key, profile)
+        for _, cb in pairs(specRefs) do
+            cb:Hide()
+            cb:ClearAllPoints()
+        end
+        if specFixedText then specFixedText:Hide() end
+        if not profile then return end
+
+        local choices, allowAll = getSpecChoices(key, profile)
+        if not allowAll then
+            profile.allSpecs = false
+        end
+
+        if not allowAll and #choices == 1 then
+            local specID = choices[1].specID
+            if type(profile.specs) ~= "table" then profile.specs = {} end
+            profile.specs[specID] = true
+            specFixedText:SetText("Loads in: " .. choices[1].label)
+            specFixedText:Show()
+            return
+        end
+
+        local visibleRefs = {}
+        for _, opt in ipairs(choices) do
+            local cb = specRefs[opt.specID]
+            if cb then
+                local visibleIndex = #visibleRefs + 1
+                cb:Show()
+                cb:SetChecked(opt.specID == 0 and profile.allSpecs == true or profile.specs and (profile.specs[opt.specID] == true or profile.specs[tostring(opt.specID)] == true))
+                if visibleIndex == 1 then
+                    cb:SetPoint("TOPLEFT", specLabel, "BOTTOMLEFT", -4, -6)
+                elseif (visibleIndex - 1) % 3 == 0 then
+                    cb:SetPoint("TOPLEFT", visibleRefs[visibleIndex - 3], "BOTTOMLEFT", 0, -4)
+                else
+                    cb:SetPoint("TOPLEFT", visibleRefs[visibleIndex - 1], "TOPLEFT", 136, 0)
+                end
+                table.insert(visibleRefs, cb)
+            end
+        end
+    end
 
     local customActionRow = CreateFrame("Frame", nil, buffOptions)
     customActionRow:SetSize(430, 24)
-    customActionRow:SetPoint("TOPLEFT", colorSwatch, "BOTTOMLEFT", 0, -12)
+    customActionRow:SetPoint("TOPLEFT", specLabel, "BOTTOMLEFT", 0, -88)
 
     removeBtn = CreateFrame("Button", nil, customActionRow, "UIPanelButtonTemplate")
     removeBtn:SetSize(72, 22)

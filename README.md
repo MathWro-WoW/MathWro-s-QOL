@@ -45,12 +45,12 @@ Adds arrow buttons and a coordinate readout when an Edit Mode frame is selected.
 Keep selected action bars (1–10) visible during vehicle combat and override bar states (e.g. shapeshift-style encounters). Prevents ElvUI's mouseover fade from hiding bars for the duration of the encounter, and restores normal fade behaviour on exit. By default only bar 1 is enabled — enable additional bars in the options panel.
 
 **Buff Health Color**
-Recolor selected ElvUI unit frame health bars while units have configured player-cast buffs. Includes per-buff settings for Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, plus custom spell IDs that add more buff profiles alongside the built-ins. Each buff can be enabled, colored, and assigned to player, target, party, or ElvUI raid frame sizes independently. Custom spell IDs are added from the buff profile dropdown via "Add custom ID...".
+Recolor selected ElvUI unit frame health bars while units have configured player-cast buffs. Includes per-buff settings for Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, plus custom spell IDs that add more buff profiles alongside the built-ins. Each buff can be enabled, colored, assigned to player, target, party, or ElvUI raid frame sizes, and restricted to relevant player specializations independently. Built-ins only expose specs from the class that can use the spell; single-spec spells such as Beacon of the Savior load in that spec automatically, while Prayer of Mending can be configured for Discipline and/or Holy Priest. Custom spell IDs are added from the buff profile dropdown via "Add custom ID..." and infer relevant specs from the player spellbook when possible, falling back to all-spec manual configuration when the spell is not discoverable.
 
 ### Debug
 
 **Buff Health Color Diagnostics**
-Adds a Debug section to the options panel with quick buttons for Target, Party 1, Raid 1, and Player. Each button prints Buff Health Color diagnostic details to chat, including whether the feature is enabled, whether the configured buff is found from the player, and which ElvUI unit frames are hooked. The same diagnostic is available with `/mqolbuffdebug <unit>`.
+Adds a Debug section to the options panel with quick buttons for Target, Party 1, Raid 1, and Player. Each button prints Buff Health Color diagnostic details to chat, including whether the feature is enabled, whether the configured buff is found from the player, whether the current spec matches the buff profile, and which ElvUI unit frames are hooked. The same diagnostic is available with `/mqolbuffdebug <unit>`.
 
 ## Slash Commands
 
