@@ -22,8 +22,8 @@ local defaults = {
     },
     cdmButton = {
         enabled = false,
-        slashWA = true,
-        slashCM = true,
+        slashWA = false,
+        slashCM = false,
     },
     auctionFilter = {
         currentExpansionOnly = false,
