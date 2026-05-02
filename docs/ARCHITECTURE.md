@@ -31,15 +31,16 @@ Defined in `MathWroQOL.toc`:
 3. `Core.lua`
 4. `Config.lua`
 5. `Features\VehicleBar.lua`
-6. `Features\GameMenu.lua`
-7. `Features\CDMButton.lua`
-8. `Features\AuctionFilter.lua`
-9. `Features\CombatLog.lua`
-10. `Features\EditModeNudge.lua`
-11. `Features\CombatTracker.lua`
-12. `Features\CombatTracker_Racials.lua`
-13. `Features\CombatTracker_Trinkets.lua`
-14. `Features\CombatTracker_Consumables.lua`
+6. `Features\BuffHealthColor.lua`
+7. `Features\GameMenu.lua`
+8. `Features\CDMButton.lua`
+9. `Features\AuctionFilter.lua`
+10. `Features\CombatLog.lua`
+11. `Features\EditModeNudge.lua`
+12. `Features\CombatTracker.lua`
+13. `Features\CombatTracker_Racials.lua`
+14. `Features\CombatTracker_Trinkets.lua`
+15. `Features\CombatTracker_Consumables.lua`
 
 ---
 
@@ -111,6 +112,7 @@ Four surfaces to wire:
 | Auction Filter | `AuctionFilter.lua` | `auctionFilter` | Pre-enables AH filters on open |
 | Combat Log | `CombatLog.lua` | `combatLog` | Auto-starts/stops combat logging by instance type and level cap |
 | Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Arrow buttons + coordinate display for Edit Mode frames |
+| Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring for configured buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs |
 | Combat Tracker | `CombatTracker.lua` + 3 section files | `combatTracker` | Cooldown icon display system (racials, trinkets, consumables) |
 
 ---
@@ -179,7 +181,7 @@ All are `local function` defined in `Config.lua`. Not global.
 | `MakeSeparator` | `(parent, anchor, offsetY)` | 1px horizontal line (Frame-wrapped, not bare Texture — see pitfalls) |
 | `MakeCheckbox` | `(parent, label, x, y, getValue, setValue)` | Toggle checkbox with ElvUI skin support |
 | `MakeSliderWithInput` | `(parent, label, min, max, get, set)` | Slider + input box with internal sync guard |
-| `MakeDropdown` | `(parent, options, getValue, setValue)` | Dropdown; options are `{ label, value }` tables |
+| `MakeDropdown` | `(parent, options, getValue, setValue, notifyFeature)` | Dropdown; options are `{ label, value, icon }` tables and may include `{ label, action }` rows; optional feature notify name defaults to `combatTracker` |
 | `MakeCollapsibleSection` | `(parent, title, isExpanded)` | Expandable section with header arrow |
 | `ApplyFrameBackdrop` | `(frame, useFadeColor)` | Backdrop with white borders; uses ElvUI colors when loaded |
 | `SetChildrenEnabled` | `(container, enabled)` | Recursively enables/disables and fades all child widgets |

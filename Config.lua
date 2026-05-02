@@ -354,8 +354,9 @@ end
 
 local _openDropdownPopups = {}
 local _dropdownCount = 0
-local function MakeDropdown(parent, options, getValue, setValue)
+local function MakeDropdown(parent, options, getValue, setValue, notifyFeature)
     _dropdownCount = _dropdownCount + 1
+    notifyFeature = notifyFeature or "combatTracker"
 
     local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
     btn:SetSize(130, 22)
@@ -369,6 +370,11 @@ local function MakeDropdown(parent, options, getValue, setValue)
     btnText:SetPoint("LEFT", 6, 0)
     btnText:SetPoint("RIGHT", -22, 0)
     btnText:SetJustifyH("LEFT")
+
+    local btnIcon = btn:CreateTexture(nil, "OVERLAY")
+    btnIcon:SetSize(14, 14)
+    btnIcon:SetPoint("LEFT", btn, "LEFT", 5, 0)
+    btnIcon:Hide()
 
     local arrow = btn:CreateTexture(nil, "OVERLAY")
     arrow:SetSize(16, 16)
@@ -390,33 +396,13 @@ local function MakeDropdown(parent, options, getValue, setValue)
     popup:Hide()
 
     local ROW_H = 20
-    popup:SetHeight(#options * ROW_H + 4)
-
     local rows = {}
-    for i, opt in ipairs(options) do
-        local row = CreateFrame("Button", nil, popup)
-        row:SetHeight(ROW_H)
-        row:SetPoint("TOPLEFT", popup, "TOPLEFT", 2, -(i - 1) * ROW_H - 2)
-        row:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -2, -(i - 1) * ROW_H - 2)
 
-        local hl = row:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetAllPoints()
-        hl:SetColorTexture(1, 0.82, 0, 0.15)
-
-        local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        label:SetPoint("LEFT", 6, 0)
-        label:SetJustifyH("LEFT")
-        label:SetText(opt.label)
-        row.label = label
-
-        row:SetScript("OnClick", function()
-            setValue(opt.value)
-            btnText:SetText(opt.label)
-            addon:NotifyFeature("combatTracker")
-            popup:Hide()
-        end)
-
-        rows[i] = { frame = row, opt = opt }
+    local function clearRows()
+        for _, row in ipairs(rows) do
+            row.frame:Hide()
+        end
+        rows = {}
     end
 
     local function updateRowColors()
@@ -428,6 +414,80 @@ local function MakeDropdown(parent, options, getValue, setValue)
                 r.frame.label:SetTextColor(1, 1, 1, 1)
             end
         end
+    end
+
+    local function refresh()
+        local cur = getValue()
+        for _, r in ipairs(rows) do
+            if r.opt.value == cur then
+                btnText:SetText(r.opt.label)
+                if r.opt.icon then
+                    btnIcon:SetTexture(r.opt.icon)
+                    btnIcon:Show()
+                    btnText:ClearAllPoints()
+                    btnText:SetPoint("LEFT", btnIcon, "RIGHT", 5, 0)
+                    btnText:SetPoint("RIGHT", -22, 0)
+                else
+                    btnIcon:Hide()
+                    btnText:ClearAllPoints()
+                    btnText:SetPoint("LEFT", 6, 0)
+                    btnText:SetPoint("RIGHT", -22, 0)
+                end
+                return
+            end
+        end
+        btnIcon:Hide()
+        btnText:ClearAllPoints()
+        btnText:SetPoint("LEFT", 6, 0)
+        btnText:SetPoint("RIGHT", -22, 0)
+        if options[1] then btnText:SetText(options[1].label) end
+    end
+
+    local function rebuildRows(newOptions)
+        if newOptions then options = newOptions end
+        clearRows()
+        popup:SetHeight(math.max(1, #options) * ROW_H + 4)
+
+        for i, opt in ipairs(options) do
+            local row = CreateFrame("Button", nil, popup)
+            row:SetHeight(ROW_H)
+            row:SetPoint("TOPLEFT", popup, "TOPLEFT", 2, -(i - 1) * ROW_H - 2)
+            row:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -2, -(i - 1) * ROW_H - 2)
+
+            local hl = row:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 0.82, 0, 0.15)
+
+            local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            if opt.icon then
+                local icon = row:CreateTexture(nil, "OVERLAY")
+                icon:SetSize(14, 14)
+                icon:SetPoint("LEFT", row, "LEFT", 5, 0)
+                icon:SetTexture(opt.icon)
+                row.icon = icon
+                label:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+            else
+                label:SetPoint("LEFT", 6, 0)
+            end
+            label:SetJustifyH("LEFT")
+            label:SetText(opt.label)
+            row.label = label
+
+            row:SetScript("OnClick", function()
+                if opt.action then
+                    opt.action(btn)
+                else
+                    setValue(opt.value)
+                    btnText:SetText(opt.label)
+                    addon:NotifyFeature(notifyFeature)
+                end
+                popup:Hide()
+            end)
+
+            rows[i] = { frame = row, opt = opt }
+        end
+
+        refresh()
     end
 
     local catcher = CreateFrame("Frame", nil, UIParent)
@@ -470,19 +530,15 @@ local function MakeDropdown(parent, options, getValue, setValue)
         end
     end)
 
-    local function refresh()
-        local cur = getValue()
-        for _, r in ipairs(rows) do
-            if r.opt.value == cur then
-                btnText:SetText(r.opt.label)
-                return
-            end
-        end
-        if options[1] then btnText:SetText(options[1].label) end
-    end
-
-    refresh()
+    rebuildRows(options)
     btn.Refresh = refresh
+    btn.SetOptions = rebuildRows
+    btn.SetDropdownWidth = function(_, width)
+        width = tonumber(width)
+        if not width then return end
+        btn:SetWidth(width)
+        popup:SetWidth(width)
+    end
     return btn
 end
 
@@ -927,33 +983,340 @@ local function BuildElvUIPanel()
 
     card:SetBottomWidget(barsContainer, 10)
 
-    local atonementCard, atonementContent = MakeCard(
+    local buffCard, buffContent = MakeCard(
         sc,
         card,
-        "Atonement Health Color",
-        "Recolor selected ElvUI unit frame health bars while the unit has Discipline Priest Atonement. Missing Atonement keeps normal ElvUI health coloring."
+        "Buff Health Color",
+        "Recolor selected ElvUI unit frame health bars while units have configured buffs. Add custom spell IDs to create more buff profiles next to Atonement and Lifebloom."
     )
 
-    local atonementEnableCB = MakeCheckbox(atonementContent, "Enable", 0, 0,
+    local buffEnableCB = MakeCheckbox(buffContent, "Enable", 0, 0,
         function()
-            return addon.db.atonementHealthColor and addon.db.atonementHealthColor.enabled == true
+            return addon.db.buffHealthColor and addon.db.buffHealthColor.enabled == true
         end,
         function(val)
-            if addon.db.atonementHealthColor then
-                addon.db.atonementHealthColor.enabled = val
-                addon:NotifyFeature("atonementHealthColor")
+            if addon.db.buffHealthColor then
+                addon.db.buffHealthColor.enabled = val
+                addon:NotifyFeature("buffHealthColor")
             end
         end
     )
-    atonementEnableCB:ClearAllPoints()
-    atonementEnableCB:SetPoint("TOPLEFT", atonementContent, "TOPLEFT", 12, -2)
+    buffEnableCB:ClearAllPoints()
+    buffEnableCB:SetPoint("TOPLEFT", buffContent, "TOPLEFT", 12, -2)
 
-    local atonementOptions = CreateFrame("Frame", nil, atonementContent)
-    atonementOptions:SetPoint("TOPLEFT", atonementEnableCB, "BOTTOMLEFT", 20, -8)
-    atonementOptions:SetSize(430, 166)
+    local buffOptions = CreateFrame("Frame", nil, buffContent)
+    buffOptions:SetPoint("TOPLEFT", buffEnableCB, "BOTTOMLEFT", 20, -8)
+    buffOptions:SetSize(430, 260)
 
-    local frameLabel = atonementOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    frameLabel:SetPoint("TOPLEFT", atonementOptions, "TOPLEFT", 0, 0)
+    local buffOrder = {
+        "atonement",
+        "lifebloom",
+        "prayerOfMending",
+        "riptide",
+        "beaconOfTheSavior",
+        "renewingMist",
+    }
+    local builtinLabels = {
+        atonement = "Atonement",
+        lifebloom = "Lifebloom",
+        prayerOfMending = "Prayer of Mending",
+        riptide = "Riptide",
+        beaconOfTheSavior = "Beacon of the Savior",
+        renewingMist = "Renewing Mist",
+    }
+    local builtinSpellIDs = {
+        atonement = 194384,
+        lifebloom = 33763,
+        prayerOfMending = 41635,
+        riptide = 61295,
+        beaconOfTheSavior = 1244893,
+        renewingMist = 448430,
+    }
+    local defaultColors = {
+        atonement = { r = 0.95, g = 0.72, b = 0.22 },
+        lifebloom = { r = 0.20, g = 0.85, b = 0.25 },
+        prayerOfMending = { r = 0.95, g = 0.88, b = 0.42 },
+        riptide = { r = 0.16, g = 0.62, b = 0.95 },
+        beaconOfTheSavior = { r = 1.00, g = 0.78, b = 0.50 },
+        renewingMist = { r = 0.35, g = 0.92, b = 0.70 },
+    }
+
+    local function copyFrames(frames)
+        frames = frames or {}
+        return {
+            player = frames.player == true,
+            target = frames.target == true,
+            party  = frames.party ~= false,
+            raid1  = frames.raid1 ~= false,
+            raid2  = frames.raid2 ~= false,
+            raid3  = frames.raid3 ~= false,
+        }
+    end
+
+    local function copyColor(color, fallback)
+        color = color or fallback or {}
+        return {
+            r = color.r or 1,
+            g = color.g or 1,
+            b = color.b or 1,
+        }
+    end
+
+    local function getSpellLabel(spellID)
+        spellID = tonumber(spellID)
+        if not spellID then return nil end
+
+        if C_Spell and C_Spell.GetSpellInfo then
+            local info = C_Spell.GetSpellInfo(spellID)
+            if info and info.name then return info.name end
+        end
+
+        local name = GetSpellInfo and GetSpellInfo(spellID)
+        return name
+    end
+
+    local function getSpellIcon(spellID)
+        spellID = tonumber(spellID)
+        if not spellID then return nil end
+
+        if C_Spell and C_Spell.GetSpellTexture then
+            return C_Spell.GetSpellTexture(spellID)
+        end
+
+        return GetSpellTexture and GetSpellTexture(spellID)
+    end
+
+    local function ensureBuffDb()
+        local db = addon.db.buffHealthColor
+        if not db then return nil end
+        if type(db.buffs) ~= "table" then db.buffs = {} end
+        if type(db.customOrder) ~= "table" then db.customOrder = {} end
+
+        for _, key in ipairs(buffOrder) do
+            if type(db.buffs[key]) ~= "table" then db.buffs[key] = {} end
+            local profile = db.buffs[key]
+            if profile.enabled == nil then profile.enabled = key == "atonement" end
+            profile.label = profile.label or builtinLabels[key]
+            profile.spellID = profile.spellID or builtinSpellIDs[key]
+            profile.color = profile.color or copyColor(defaultColors[key])
+            profile.frames = profile.frames or copyFrames()
+        end
+
+        for _, key in ipairs(db.customOrder) do
+            local profile = db.buffs[key]
+            if type(profile) == "table" then
+                if profile.enabled == nil then profile.enabled = true end
+                profile.label = profile.label or ("Spell " .. tostring(profile.spellID or key))
+                profile.color = profile.color or copyColor(defaultColors.atonement)
+                profile.frames = profile.frames or copyFrames()
+            end
+        end
+
+        db.selectedBuff = db.selectedBuff or "atonement"
+        return db
+    end
+
+    local function getSelectedProfile()
+        local db = ensureBuffDb()
+        if not db or not db.buffs then return nil end
+        local profile = db.buffs[db.selectedBuff]
+        if profile then return profile end
+
+        db.selectedBuff = "atonement"
+        return db.buffs.atonement
+    end
+
+    local openCustomSpellPopup = function() end
+
+    local function buildBuffOptions()
+        local db = ensureBuffDb()
+        local options = {}
+
+        for _, key in ipairs(buffOrder) do
+            local profile = db and db.buffs and db.buffs[key]
+            table.insert(options, {
+                label = profile and profile.label or builtinLabels[key],
+                value = key,
+                icon = getSpellIcon(profile and profile.spellID or builtinSpellIDs[key]),
+            })
+        end
+
+        for _, key in ipairs((db and db.customOrder) or {}) do
+            local profile = db.buffs and db.buffs[key]
+            if profile then
+                table.insert(options, {
+                    label = profile.label or ("Spell " .. tostring(profile.spellID)),
+                    value = key,
+                    icon = getSpellIcon(profile.spellID),
+                })
+            end
+        end
+
+        table.insert(options, {
+            label = "Add custom ID...",
+            action = function()
+                openCustomSpellPopup()
+            end,
+        })
+
+        return options
+    end
+
+    local selectorLabel = buffOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    selectorLabel:SetPoint("TOPLEFT", buffOptions, "TOPLEFT", 0, 0)
+    selectorLabel:SetText("Buff profile:")
+
+    local profileEnableCB
+    local colorSwatch
+    local spellInfo
+    local removeBtn
+    local frameRefs = {}
+    local frameCheckboxes = {}
+    local buffSelector
+
+    local function refreshProfileControls()
+        local db = ensureBuffDb()
+        local profile = getSelectedProfile()
+        if not db or not profile then return end
+
+        if buffSelector then
+            buffSelector:Refresh()
+        end
+        if profileEnableCB then profileEnableCB:SetChecked(profile.enabled == true) end
+        for key, cb in pairs(frameCheckboxes) do
+            cb:SetChecked(profile.frames and profile.frames[key] == true)
+        end
+        if colorSwatch and colorSwatch.swatch then colorSwatch.swatch:Refresh() end
+        if spellInfo then
+            spellInfo:SetText("Spell ID: " .. tostring(profile.spellID or ""))
+        end
+        if removeBtn then
+            local removable = tostring(db.selectedBuff or ""):match("^custom:")
+            removeBtn:SetShown(removable and true or false)
+        end
+    end
+
+    buffSelector = MakeDropdown(buffOptions, buildBuffOptions(),
+        function()
+            local db = ensureBuffDb()
+            return db and db.selectedBuff or "atonement"
+        end,
+        function(value)
+            local db = ensureBuffDb()
+            if db then
+                db.selectedBuff = value
+                C_Timer.After(0, refreshProfileControls)
+            end
+        end,
+        "buffHealthColor"
+    )
+    buffSelector:SetDropdownWidth(210)
+    buffSelector:SetPoint("LEFT", selectorLabel, "RIGHT", 12, 0)
+
+    local customPopup = CreateFrame("Frame", "MathWroQOL_BuffHealthColorCustomSpellPopup", UIParent, "BackdropTemplate")
+    customPopup:SetSize(220, 78)
+    customPopup:SetFrameStrata("TOOLTIP")
+    ApplyFrameBackdrop(customPopup, false)
+    customPopup:Hide()
+
+    local customPopupLabel = customPopup:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    customPopupLabel:SetPoint("TOPLEFT", customPopup, "TOPLEFT", 10, -10)
+    customPopupLabel:SetText("Add buff spell ID")
+
+    local customInput = CreateFrame("EditBox", nil, customPopup, "InputBoxTemplate")
+    customInput:SetSize(92, 22)
+    customInput:SetPoint("TOPLEFT", customPopupLabel, "BOTTOMLEFT", 2, -10)
+    customInput:SetAutoFocus(false)
+    customInput:SetNumeric(true)
+    customInput:SetMaxLetters(8)
+
+    local addCustomBtn = CreateFrame("Button", nil, customPopup, "UIPanelButtonTemplate")
+    addCustomBtn:SetSize(48, 22)
+    addCustomBtn:SetPoint("LEFT", customInput, "RIGHT", 8, 0)
+    addCustomBtn:SetText("Add")
+    local addCustomSkin = ElvSkin()
+    if addCustomSkin then addCustomSkin:HandleButton(addCustomBtn) end
+
+    local cancelCustomBtn = CreateFrame("Button", nil, customPopup, "UIPanelButtonTemplate")
+    cancelCustomBtn:SetSize(58, 22)
+    cancelCustomBtn:SetPoint("LEFT", addCustomBtn, "RIGHT", 6, 0)
+    cancelCustomBtn:SetText("Cancel")
+    local cancelCustomSkin = ElvSkin()
+    if cancelCustomSkin then cancelCustomSkin:HandleButton(cancelCustomBtn) end
+
+    local function addCustomSpellID()
+        local spellID = tonumber(customInput:GetText())
+        if not spellID or spellID < 1 then return end
+
+        local db = ensureBuffDb()
+        if not db then return end
+
+        local key = "custom:" .. tostring(spellID)
+        if not db.buffs[key] then
+            db.buffs[key] = {
+                enabled = true,
+                label = getSpellLabel(spellID) or ("Spell " .. tostring(spellID)),
+                spellID = spellID,
+                color = copyColor(defaultColors.atonement),
+                frames = copyFrames(),
+            }
+            table.insert(db.customOrder, key)
+        end
+
+        db.selectedBuff = key
+        customInput:SetText("")
+        customPopup:Hide()
+        buffSelector:SetOptions(buildBuffOptions())
+        refreshProfileControls()
+        addon:NotifyFeature("buffHealthColor")
+        FindScrollChildAndRecalc(buffOptions)
+    end
+
+    openCustomSpellPopup = function()
+        customPopup:ClearAllPoints()
+        customPopup:SetPoint("TOPLEFT", buffSelector, "BOTTOMLEFT", 0, -4)
+        customPopup:Show()
+        customInput:SetText("")
+        customInput:SetFocus()
+    end
+
+    addCustomBtn:SetScript("OnClick", addCustomSpellID)
+    cancelCustomBtn:SetScript("OnClick", function()
+        customInput:SetText("")
+        customPopup:Hide()
+    end)
+    customInput:SetScript("OnEnterPressed", function(self)
+        addCustomSpellID()
+        self:ClearFocus()
+    end)
+    customInput:SetScript("OnEscapePressed", function(self)
+        self:SetText("")
+        self:ClearFocus()
+        customPopup:Hide()
+    end)
+
+    profileEnableCB = MakeCheckbox(buffOptions, "Enable selected buff", 0, 0,
+        function()
+            local profile = getSelectedProfile()
+            return profile and profile.enabled == true
+        end,
+        function(val)
+            local profile = getSelectedProfile()
+            if profile then
+                profile.enabled = val == true
+                addon:NotifyFeature("buffHealthColor")
+            end
+        end
+    )
+    profileEnableCB:ClearAllPoints()
+    profileEnableCB:SetPoint("TOPLEFT", selectorLabel, "BOTTOMLEFT", -4, -8)
+
+    spellInfo = buffOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    spellInfo:SetPoint("LEFT", profileEnableCB.Text, "RIGHT", 18, 0)
+    spellInfo:SetTextColor(0.68, 0.68, 0.68)
+
+    local frameLabel = buffOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    frameLabel:SetPoint("TOPLEFT", profileEnableCB, "BOTTOMLEFT", 4, -10)
     frameLabel:SetText("Frames to recolor:")
 
     local frameOptions = {
@@ -965,18 +1328,17 @@ local function BuildElvUIPanel()
         { key = "raid3",  label = "Raid 3" },
     }
 
-    local frameRefs = {}
     for i, opt in ipairs(frameOptions) do
-        local cb = MakeCheckbox(atonementOptions, opt.label, 0, 0,
+        local cb = MakeCheckbox(buffOptions, opt.label, 0, 0,
             function()
-                local db = addon.db.atonementHealthColor
-                return db and db.frames and db.frames[opt.key] == true
+                local profile = getSelectedProfile()
+                return profile and profile.frames and profile.frames[opt.key] == true
             end,
             function(val)
-                local db = addon.db.atonementHealthColor
-                if db and db.frames then
-                    db.frames[opt.key] = val == true
-                    addon:NotifyFeature("atonementHealthColor")
+                local profile = getSelectedProfile()
+                if profile and profile.frames then
+                    profile.frames[opt.key] = val == true
+                    addon:NotifyFeature("buffHealthColor")
                 end
             end
         )
@@ -989,49 +1351,75 @@ local function BuildElvUIPanel()
             cb:SetPoint("TOPLEFT", frameRefs[i - 1], "TOPLEFT", 96, 0)
         end
         frameRefs[i] = cb
+        frameCheckboxes[opt.key] = cb
     end
 
-    local colorSwatch = MakeColorSwatch(atonementOptions, "Atonement color",
+    colorSwatch = MakeColorSwatch(buffOptions, "Buff color",
         function()
-            local db = addon.db.atonementHealthColor
-            return db and db.color
+            local profile = getSelectedProfile()
+            return profile and profile.color
         end,
         function(color)
-            local db = addon.db.atonementHealthColor
-            if db then
-                db.color = color
-                addon:NotifyFeature("atonementHealthColor")
+            local profile = getSelectedProfile()
+            if profile then
+                profile.color = color
+                addon:NotifyFeature("buffHealthColor")
             end
         end
     )
     colorSwatch:SetPoint("TOPLEFT", frameRefs[4], "BOTTOMLEFT", 4, -10)
 
-    local dandersNote = atonementOptions:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    dandersNote:SetPoint("TOPLEFT", colorSwatch, "BOTTOMLEFT", 0, -10)
-    dandersNote:SetWidth(410)
-    dandersNote:SetJustifyH("LEFT")
-    dandersNote:SetTextColor(0.68, 0.68, 0.68)
-    dandersNote:SetText("DandersFrames users can create the same behavior in DandersFrames Aura Designer with Atonement spell ID 194384 and a Health Bar Color effect.")
+    local customActionRow = CreateFrame("Frame", nil, buffOptions)
+    customActionRow:SetSize(430, 24)
+    customActionRow:SetPoint("TOPLEFT", colorSwatch, "BOTTOMLEFT", 0, -12)
 
-    local function updateAtonementGatekeeper()
-        local enabled = addon.db.atonementHealthColor and addon.db.atonementHealthColor.enabled == true
-        SetChildrenEnabled(atonementOptions, enabled)
-        if colorSwatch.swatch then colorSwatch.swatch:Refresh() end
+    removeBtn = CreateFrame("Button", nil, customActionRow, "UIPanelButtonTemplate")
+    removeBtn:SetSize(72, 22)
+    removeBtn:SetPoint("TOPLEFT", customActionRow, "TOPLEFT", 0, 0)
+    removeBtn:SetText("Remove")
+    local removeSkin = ElvSkin()
+    if removeSkin then removeSkin:HandleButton(removeBtn) end
+
+    removeBtn:SetScript("OnClick", function()
+        local db = ensureBuffDb()
+        if not db or not db.selectedBuff or not tostring(db.selectedBuff):match("^custom:") then return end
+
+        local selected = db.selectedBuff
+        db.buffs[selected] = nil
+        for i = #db.customOrder, 1, -1 do
+            if db.customOrder[i] == selected then
+                table.remove(db.customOrder, i)
+            end
+        end
+
+        db.selectedBuff = "atonement"
+        buffSelector:SetOptions(buildBuffOptions())
+        refreshProfileControls()
+        addon:NotifyFeature("buffHealthColor")
+        FindScrollChildAndRecalc(buffOptions)
+    end)
+
+    local function updateBuffGatekeeper()
+        local enabled = addon.db.buffHealthColor and addon.db.buffHealthColor.enabled == true
+        SetChildrenEnabled(buffOptions, enabled)
+        if not enabled then customPopup:Hide() end
+        refreshProfileControls()
     end
-    atonementEnableCB:HookScript("OnClick", updateAtonementGatekeeper)
+    buffEnableCB:HookScript("OnClick", updateBuffGatekeeper)
 
     if not elvuiLoaded then
-        atonementEnableCB:Disable()
-        atonementEnableCB:SetAlpha(0.4)
-        SetChildrenEnabled(atonementOptions, false)
+        buffEnableCB:Disable()
+        buffEnableCB:SetAlpha(0.4)
+        SetChildrenEnabled(buffOptions, false)
     end
 
-    atonementCard:SetBottomWidget(dandersNote, 12)
+    refreshProfileControls()
+    buffCard:SetBottomWidget(customActionRow, 16)
 
     panel:HookScript("OnShow", function()
         if elvuiLoaded then
             updateVehicleGatekeeper()
-            updateAtonementGatekeeper()
+            updateBuffGatekeeper()
         end
     end)
 

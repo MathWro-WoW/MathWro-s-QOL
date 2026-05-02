@@ -11,7 +11,7 @@ Libs\LibEditMode\LibEditMode.lua
 Core.lua
 Config.lua
 Features\VehicleBar.lua
-Features\AtonementHealthColor.lua
+Features\BuffHealthColor.lua
 Features\GameMenu.lua
 Features\CDMButton.lua
 Features\AuctionFilter.lua
