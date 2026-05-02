@@ -8,6 +8,12 @@ Read `docs/ARCHITECTURE.md` before writing or modifying any code. It contains th
 
 ---
 
+### API Documentation
+
+Agents should consult the WoW API documentation which is available via the MCP Server "documcp" by using the MCP's provided tools and referencing the source called "WoW Addon API". This documentation includes detailed information on all available functions, events, and constants that can be used in addon development.
+
+---
+
 ## Build / Lint / Test
 
 There is **no build step, linter, or automated test runner**. Validate manually:
