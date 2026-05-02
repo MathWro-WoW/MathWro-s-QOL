@@ -231,3 +231,14 @@ function addon:NotifyFeature(name)
         end
     end
 end
+
+SLASH_MQOLBUFFDEBUG1 = "/mqolbuffdebug"
+SlashCmdList["MQOLBUFFDEBUG"] = function(message)
+    if addon.DebugBuffHealthColor then
+        addon.DebugBuffHealthColor(message)
+    elseif DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99MQOL BuffHealth:|r diagnostic unavailable; BuffHealthColor did not finish loading")
+    else
+        print("MQOL BuffHealth: diagnostic unavailable; BuffHealthColor did not finish loading")
+    end
+end

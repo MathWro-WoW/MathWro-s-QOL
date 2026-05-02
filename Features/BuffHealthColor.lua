@@ -65,6 +65,7 @@ local eventFrames = {}
 local hookedHealthBars = setmetatable({}, { __mode = "k" })
 local refreshPending = {}
 local hooksRegistered = false
+local scanExistingHealthBars
 
 local function copyColor(color, fallback)
     color = color or fallback or {}
@@ -247,11 +248,170 @@ local function applyBuffColor(healthBar, unit)
     if not profile then return end
 
     local color = profile.color or {}
+    local r, g, b = color.r or 1, color.g or 1, color.b or 1
     if UF and UF.SetStatusBarColor then
-        UF:SetStatusBarColor(healthBar, color.r or 1, color.g or 1, color.b or 1)
+        UF:SetStatusBarColor(healthBar, r, g, b)
     else
-        healthBar:SetStatusBarColor(color.r or 1, color.g or 1, color.b or 1)
+        healthBar:SetStatusBarColor(r, g, b)
     end
+
+    if healthBar.bg and healthBar.bg.SetVertexColor then
+        healthBar.bg:SetVertexColor(r, g, b)
+    end
+
+    if healthBar.backdrop and healthBar.backdrop.SetBackdropColor then
+        healthBar.backdrop:SetBackdropColor(r, g, b)
+    end
+end
+
+local function debugPrint(message)
+    local line = "|cff33ff99MQOL BuffHealth:|r " .. tostring(message)
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage(line)
+    else
+        print(line)
+    end
+end
+
+local function boolText(value)
+    return value and "yes" or "no"
+end
+
+local function getFrameName(frame)
+    return frame and (frame:GetName() or "<unnamed>") or "<nil>"
+end
+
+local function getFrameUnit(frame)
+    return frame and (frame.unit or frame.displayedUnit)
+end
+
+local function getAuraDebug(unit, spellID)
+    local debug = { any = false, player = false, sources = {} }
+    local seenSources = {}
+
+    local function addAura(auraData)
+        if not auraData or auraData.spellId ~= spellID then return end
+
+        debug.any = true
+        if auraData.sourceUnit == "player" then debug.player = true end
+
+        local source = tostring(auraData.sourceUnit or "nil")
+        if not seenSources[source] then
+            table.insert(debug.sources, source)
+            seenSources[source] = true
+        end
+    end
+
+    if unit == "player" and GetPlayerAuraBySpellID then
+        local ok, auraData = pcall(GetPlayerAuraBySpellID, spellID)
+        if ok then addAura(auraData) end
+    end
+
+    if GetUnitAuraBySpellID then
+        local ok, auraData = pcall(GetUnitAuraBySpellID, unit, spellID)
+        if ok then addAura(auraData) end
+    end
+
+    if AuraUtil and AuraUtil.ForEachAura then
+        AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(auraData)
+            addAura(auraData)
+        end, true)
+    elseif GetAuraDataByIndex then
+        for i = 1, 40 do
+            local ok, auraData = pcall(GetAuraDataByIndex, unit, i, "HELPFUL")
+            if not ok or not auraData then break end
+            addAura(auraData)
+        end
+    end
+
+    return debug
+end
+
+local function getSelectedProfileLabel(frame, unit)
+    local db = ensureDbShape()
+    if not db or not db.buffs then return "none" end
+
+    local labels = {}
+    forEachProfile(db, function(_, profile)
+        if profile.enabled and isSelectedFrame(profile, frame, unit) then
+            table.insert(labels, profile.label or tostring(profile.spellID))
+        end
+    end)
+
+    return #labels > 0 and table.concat(labels, ", ") or "none"
+end
+
+local function printDebugForUnit(unit)
+    local db = ensureDbShape()
+    scanExistingHealthBars()
+
+    debugPrint("unit=" .. tostring(unit) .. " exists=" .. boolText(UnitExists(unit)) .. " featureEnabled=" .. boolText(db and db.enabled))
+
+    if UF and UF.db and UF.db.colors then
+        local colors = UF.db.colors
+        debugPrint("ElvUI transparentHealth=" .. boolText(colors.transparentHealth) .. " customHealthBackdrop=" .. boolText(colors.customhealthbackdrop))
+    end
+
+    if not db then return end
+
+    forEachProfile(db, function(_, profile)
+        if not profile.enabled then return end
+
+        local spellID = tonumber(profile.spellID)
+        if spellID then
+            local aura = getAuraDebug(unit, spellID)
+            local sources = #aura.sources > 0 and table.concat(aura.sources, ",") or "none"
+            debugPrint((profile.label or tostring(spellID)) .. " spellID=" .. spellID .. " auraAny=" .. boolText(aura.any) .. " playerCast=" .. boolText(aura.player) .. " sources=" .. sources)
+        end
+    end)
+
+    local elvFrames, elvHealthBars, unwrappedHealthBars = 0, 0, 0
+    local frame = EnumerateFrames()
+    while frame do
+        if tostring(frame:GetName() or ""):match("^ElvUF_") then
+            elvFrames = elvFrames + 1
+            if frame.Health then
+                elvHealthBars = elvHealthBars + 1
+                if not hookedHealthBars[frame.Health] then
+                    unwrappedHealthBars = unwrappedHealthBars + 1
+                end
+            end
+        end
+        frame = EnumerateFrames(frame)
+    end
+
+    local total, sameUnit, printed = 0, 0, 0
+    for healthBar in pairs(hookedHealthBars) do
+        total = total + 1
+        local frame = healthBar and healthBar:GetParent()
+        local frameUnit = getFrameUnit(frame)
+        if frameUnit == unit then sameUnit = sameUnit + 1 end
+    end
+
+    debugPrint("elvFrames=" .. elvFrames .. " elvHealthBars=" .. elvHealthBars .. " hookedHealthBars=" .. total .. " unwrappedHealthBars=" .. unwrappedHealthBars .. " matchingUnit=" .. sameUnit)
+
+    for healthBar in pairs(hookedHealthBars) do
+        local frame = healthBar and healthBar:GetParent()
+        local frameUnit = getFrameUnit(frame)
+        if frameUnit == unit or printed < 6 then
+            printed = printed + 1
+            debugPrint(
+                "frame=" .. getFrameName(frame)
+                .. " unit=" .. tostring(frame and frame.unit)
+                .. " displayedUnit=" .. tostring(frame and frame.displayedUnit)
+                .. " group=" .. tostring(getFrameGroup(frame, frameUnit))
+                .. " selectedFor=" .. getSelectedProfileLabel(frame, frameUnit)
+            )
+        end
+        if printed >= 12 then break end
+    end
+end
+
+function addon.DebugBuffHealthColor(message)
+    local unit = strtrim(message or "")
+    if unit == "" then unit = "target" end
+    if unit == "self" then unit = "player" end
+    printDebugForUnit(unit)
 end
 
 local function wrapHealthBar(healthBar)
@@ -268,7 +428,7 @@ local function wrapHealthBar(healthBar)
     hookedHealthBars[healthBar] = true
 end
 
-local function scanExistingHealthBars()
+scanExistingHealthBars = function()
     local frame = EnumerateFrames()
     while frame do
         if frame.Health and frame.Health.PostUpdateColor and tostring(frame:GetName() or ""):match("^ElvUF_") then

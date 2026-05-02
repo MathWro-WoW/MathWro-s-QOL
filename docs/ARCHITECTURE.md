@@ -165,6 +165,7 @@ Settings panels registered via `Settings.RegisterCanvasLayoutCategory` / `Settin
   - **Combat Tracker** — master enable; per-section collapsible blocks (Racials, Trinkets, Consumables)
   - **ElvUI Plugins** — VehicleBar per-bar visibility toggles
   - **Edit Mode** — EditModeNudge enable toggle
+  - **Debug** — troubleshooting actions such as Buff Health Color unit diagnostics
 
 `/mqol` opens the panel via `Settings.OpenToCategory(parentCat:GetID())` (fallback: `InterfaceOptionsFrame_OpenToCategory`).
 

@@ -1476,6 +1476,67 @@ local function BuildEditModePanel()
     return panel
 end
 
+local function BuildDebugPanel()
+    local panel = CreateFrame("Frame")
+    panel.name = "Debug"
+
+    local sc = MakePanelScaffold(panel, "Debug", "MathWroQOL_DebugScroll")
+
+    local rootAnchor = CreateFrame("Frame", nil, sc)
+    rootAnchor:SetSize(1, 1)
+    rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
+
+    local card, content = MakeCard(
+        sc,
+        rootAnchor,
+        "Buff Health Color",
+        "Prints diagnostic details for the selected unit token to the chat frame."
+    )
+
+    local buttons = CreateFrame("Frame", nil, content)
+    buttons:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
+    buttons:SetSize(430, 56)
+
+    local units = {
+        { label = "Target", unit = "target" },
+        { label = "Party 1", unit = "party1" },
+        { label = "Raid 1", unit = "raid1" },
+        { label = "Player", unit = "player" },
+    }
+
+    local function runBuffDebug(unit)
+        if addon.DebugBuffHealthColor then
+            addon.DebugBuffHealthColor(unit)
+        elseif DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99MQOL BuffHealth:|r diagnostic unavailable; BuffHealthColor did not finish loading")
+        else
+            print("MQOL BuffHealth: diagnostic unavailable; BuffHealthColor did not finish loading")
+        end
+    end
+
+    local S = ElvSkin()
+    local firstButton
+    for i, option in ipairs(units) do
+        local btn = CreateFrame("Button", nil, buttons, "UIPanelButtonTemplate")
+        btn:SetSize(92, 22)
+        btn:SetText(option.label)
+        if S then S:HandleButton(btn) end
+        if i == 1 then
+            btn:SetPoint("TOPLEFT", buttons, "TOPLEFT", 0, 0)
+            firstButton = btn
+        else
+            btn:SetPoint("LEFT", firstButton, "LEFT", (i - 1) * 100, 0)
+        end
+        btn:SetScript("OnClick", function()
+            runBuffDebug(option.unit)
+        end)
+    end
+
+    card:SetBottomWidget(buttons, 10)
+
+    return panel
+end
+
 local function BuildCombatTrackerPanel()
     local panel = CreateFrame("Frame")
     panel.name = "Combat Tracker"
@@ -2443,6 +2504,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
     local combatTrackerPanel = BuildCombatTrackerPanel()
     local elvuiPanel = BuildElvUIPanel()
     local editModePanel = BuildEditModePanel()
+    local debugPanel = BuildDebugPanel()
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         local parentCat = Settings.RegisterCanvasLayoutCategory(parentPanel, parentPanel.name)
@@ -2451,6 +2513,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatTrackerPanel, combatTrackerPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel, elvuiPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, editModePanel, editModePanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, debugPanel, debugPanel.name)
         Settings.RegisterAddOnCategory(parentCat)
 
         SLASH_MQOL1 = "/mqol"
@@ -2464,6 +2527,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         InterfaceOptions_AddCategory(combatTrackerPanel, parentPanel)
         InterfaceOptions_AddCategory(elvuiPanel, parentPanel)
         InterfaceOptions_AddCategory(editModePanel, parentPanel)
+        InterfaceOptions_AddCategory(debugPanel, parentPanel)
 
         SLASH_MQOL1 = "/mqol"
         SlashCmdList["MQOL"] = function()
