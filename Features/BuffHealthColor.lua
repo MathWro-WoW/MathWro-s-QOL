@@ -82,7 +82,10 @@ local isSecretValue = issecretvalue or function() return false end
 local eventFrames = {}
 local specEventFrame
 local hookedHealthBars = setmetatable({}, { __mode = "k" })
-local refreshPending = {}
+local auraState = {}
+local activeProfiles = {}
+local activeSpellIDs = {}
+local activeProfilesReady = false
 local hooksRegistered = false
 local scanExistingHealthBars
 local registerEvents
@@ -209,42 +212,6 @@ local function auraDataMatchesSpellID(auraData, spellID)
         and sourceUnit == "player"
 end
 
-local function unitHasBuff(unit, spellID)
-    if not unit or not spellID or not UnitExists(unit) then return false end
-
-    if unit == "player" and GetPlayerAuraBySpellID then
-        local ok, auraData = pcall(GetPlayerAuraBySpellID, spellID)
-        if ok and auraDataMatchesSpellID(auraData, spellID) then return true end
-    elseif GetUnitAuraBySpellID then
-        local ok, auraData = pcall(GetUnitAuraBySpellID, unit, spellID)
-        if ok and auraDataMatchesSpellID(auraData, spellID) then return true end
-    end
-
-    if AuraUtil and AuraUtil.ForEachAura then
-        local found = false
-        AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(auraData)
-            if auraDataMatchesSpellID(auraData, spellID) then
-                found = true
-                return true
-            end
-        end, true)
-        if found then return true end
-    end
-
-    if GetAuraDataByIndex then
-        for i = 1, 40 do
-            local ok, auraData = pcall(GetAuraDataByIndex, unit, i, "HELPFUL")
-            if not ok or not auraData then break end
-
-            if auraDataMatchesSpellID(auraData, spellID) then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
 local function getCurrentSpecID()
     if not GetSpecialization or not GetSpecializationInfo then return nil end
 
@@ -284,28 +251,183 @@ local function forEachProfile(db, callback)
     end
 end
 
+local function rebuildActiveProfiles(db)
+    activeProfiles = {}
+    activeSpellIDs = {}
+    activeProfilesReady = true
+
+    if not db or not db.enabled then return end
+
+    forEachProfile(db, function(_, profile)
+        local spellID = tonumber(profile.spellID)
+        if profile.enabled and spellID and profileMatchesCurrentSpec(profile) then
+            table.insert(activeProfiles, profile)
+            activeSpellIDs[spellID] = true
+        end
+    end)
+end
+
+local function clearAuraState()
+    for unit in pairs(auraState) do
+        auraState[unit] = nil
+    end
+end
+
+local function getUnitAuraState(unit)
+    local state = auraState[unit]
+    if not state then
+        state = { spells = {}, instances = {} }
+        auraState[unit] = state
+    end
+    return state
+end
+
+local function addTrackedAura(state, auraData)
+    if not auraData or not auraData.auraInstanceID then return false end
+
+    local spellID = auraData.spellId
+    if isSecretValue(spellID) or not activeSpellIDs[spellID] or auraData.sourceUnit ~= "player" then return false end
+
+    if state.instances[auraData.auraInstanceID] == spellID then return false end
+
+    state.instances[auraData.auraInstanceID] = spellID
+    state.spells[spellID] = (state.spells[spellID] or 0) + 1
+    return true
+end
+
+local function removeTrackedAura(state, auraInstanceID)
+    local spellID = state.instances[auraInstanceID]
+    if not spellID then return false end
+
+    state.instances[auraInstanceID] = nil
+    local count = (state.spells[spellID] or 1) - 1
+    state.spells[spellID] = count > 0 and count or nil
+    return true
+end
+
+local function scanUnitAuras(unit)
+    local state = getUnitAuraState(unit)
+    state.spells = {}
+    state.instances = {}
+
+    if not unit or not UnitExists(unit) then return state end
+
+    if AuraUtil and AuraUtil.ForEachAura then
+        AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(auraData)
+            addTrackedAura(state, auraData)
+        end, true)
+    elseif GetAuraDataByIndex then
+        for i = 1, 40 do
+            local ok, auraData = pcall(GetAuraDataByIndex, unit, i, "HELPFUL")
+            if not ok or not auraData then break end
+            addTrackedAura(state, auraData)
+        end
+    end
+
+    return state
+end
+
+local function updateTrackedAuraByInstanceID(unit, state, auraInstanceID)
+    local wasTracked = removeTrackedAura(state, auraInstanceID)
+    local auraData
+    if C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+        auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
+    end
+
+    local isTracked = addTrackedAura(state, auraData)
+    return wasTracked or isTracked
+end
+
+local function processUnitAuraUpdate(unit, updateInfo)
+    if not unit then return false end
+
+    if not activeProfilesReady then
+        rebuildActiveProfiles(getDb())
+    end
+    if #activeProfiles == 0 then return false end
+
+    if not updateInfo or updateInfo.isFullUpdate or not auraState[unit] then
+        scanUnitAuras(unit)
+        return true
+    end
+
+    local state = getUnitAuraState(unit)
+    local changed = false
+
+    if updateInfo.removedAuraInstanceIDs then
+        for _, auraInstanceID in ipairs(updateInfo.removedAuraInstanceIDs) do
+            changed = removeTrackedAura(state, auraInstanceID) or changed
+        end
+    end
+
+    if updateInfo.addedAuras then
+        for _, auraData in ipairs(updateInfo.addedAuras) do
+            changed = addTrackedAura(state, auraData) or changed
+        end
+    end
+
+    if updateInfo.updatedAuraInstanceIDs then
+        for _, auraInstanceID in ipairs(updateInfo.updatedAuraInstanceIDs) do
+            changed = updateTrackedAuraByInstanceID(unit, state, auraInstanceID) or changed
+        end
+    end
+
+    return changed
+end
+
+local function unitHasTrackedBuff(unit, spellID)
+    local state = auraState[unit]
+    if not state then
+        state = scanUnitAuras(unit)
+    end
+
+    return state.spells[spellID] ~= nil
+end
+
 local function findMatchingProfile(db, healthBar, unit)
     local frame = healthBar and healthBar:GetParent()
     if not frame then return nil end
 
-    local matchedProfile
-    forEachProfile(db, function(_, profile)
+    for _, profile in ipairs(activeProfiles) do
         local spellID = tonumber(profile.spellID)
-        if profile.enabled and spellID and profileMatchesCurrentSpec(profile) and isSelectedFrame(profile, frame, unit) and unitHasBuff(unit, spellID) then
-            matchedProfile = profile
-            return true
+        if spellID and isSelectedFrame(profile, frame, unit) and unitHasTrackedBuff(unit, spellID) then
+            return profile
         end
-    end)
+    end
+end
 
-    return matchedProfile
+local function captureBackdropColor(healthBar)
+    local backdrop = healthBar and healthBar.backdrop
+    if not backdrop or healthBar._mqolBuffHealthBackdropColor or not backdrop.GetBackdropColor then return end
+
+    local r, g, b, a = backdrop:GetBackdropColor()
+    healthBar._mqolBuffHealthBackdropColor = { r = r, g = g, b = b, a = a }
+end
+
+local function restoreBackdropColor(healthBar)
+    local backdrop = healthBar and healthBar.backdrop
+    local color = healthBar and healthBar._mqolBuffHealthBackdropColor
+    if not backdrop or not color or not backdrop.SetBackdropColor then return end
+
+    backdrop:SetBackdropColor(color.r or 0, color.g or 0, color.b or 0, color.a or 1)
 end
 
 local function applyBuffColor(healthBar, unit)
-    local db = ensureDbShape()
-    if not db or not db.enabled then return end
+    local db = getDb()
+    if not db or not db.enabled then
+        restoreBackdropColor(healthBar)
+        return
+    end
+
+    if not activeProfilesReady then
+        rebuildActiveProfiles(db)
+    end
 
     local profile = findMatchingProfile(db, healthBar, unit)
-    if not profile then return end
+    if not profile then
+        restoreBackdropColor(healthBar)
+        return
+    end
 
     local color = profile.color or {}
     local r, g, b = color.r or 1, color.g or 1, color.b or 1
@@ -313,6 +435,15 @@ local function applyBuffColor(healthBar, unit)
         UF:SetStatusBarColor(healthBar, r, g, b)
     else
         healthBar:SetStatusBarColor(r, g, b)
+    end
+
+    if healthBar.bg and healthBar.bg.SetVertexColor then
+        healthBar.bg:SetVertexColor(r, g, b)
+    end
+
+    if healthBar.backdrop and healthBar.backdrop.SetBackdropColor then
+        captureBackdropColor(healthBar)
+        healthBar.backdrop:SetBackdropColor(r, g, b, healthBar._mqolBuffHealthBackdropColor and healthBar._mqolBuffHealthBackdropColor.a or 1)
     end
 end
 
@@ -494,10 +625,10 @@ end
 
 local function refreshFrame(frame)
     if not frame or not frame.Health then return end
-    if frame.UpdateAllElements then
-        frame:UpdateAllElements("ElvUI_UpdateAllElements")
-    elseif frame.Health.ForceUpdate then
+    if frame.Health.ForceUpdate then
         frame.Health:ForceUpdate()
+    elseif frame.UpdateAllElements then
+        frame:UpdateAllElements("ElvUI_UpdateAllElements")
     end
 end
 
@@ -508,15 +639,6 @@ local function refreshUnit(unit)
             refreshFrame(frame)
         end
     end
-end
-
-local function scheduleUnitRefresh(unit)
-    if refreshPending[unit] then return end
-    refreshPending[unit] = true
-    C_Timer.After(0, function()
-        refreshPending[unit] = nil
-        refreshUnit(unit)
-    end)
 end
 
 local function refreshAll()
@@ -533,8 +655,10 @@ local function addEventUnit(unit)
 
     local frame = CreateFrame("Frame")
     frame:RegisterUnitEvent("UNIT_AURA", unit)
-    frame:SetScript("OnEvent", function(_, _, eventUnit)
-        scheduleUnitRefresh(eventUnit)
+    frame:SetScript("OnEvent", function(_, _, eventUnit, updateInfo)
+        if processUnitAuraUpdate(eventUnit, updateInfo) then
+            refreshUnit(eventUnit)
+        end
     end)
     eventFrames[unit] = frame
 end
@@ -566,21 +690,22 @@ end
 
 registerEvents = function()
     unregisterEvents()
+    clearAuraState()
 
     local db = ensureDbShape()
+    rebuildActiveProfiles(db)
     if not db or not db.enabled then return end
 
     registerSpecEvent()
 
     local selected = {}
-    forEachProfile(db, function(_, profile)
-        if not profile.enabled or not profileMatchesCurrentSpec(profile) then return end
+    for _, profile in ipairs(activeProfiles) do
         local frames = profile.frames or {}
         selected.player = selected.player or frames.player
         selected.target = selected.target or frames.target
         selected.party  = selected.party or frames.party
         selected.raid   = selected.raid or frames.raid1 or frames.raid2 or frames.raid3
-    end)
+    end
 
     if selected.player or selected.party or selected.raid then
         addEventUnit("player")

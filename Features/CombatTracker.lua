@@ -354,6 +354,8 @@ function CT:Apply()
         end
     end
 
+    if not db.enabled then return end
+
     -- Full data scan for all sections (handles enabled/disabled toggles, filter changes)
     for _, sec in ipairs(sections) do
         sec:RebuildIcons()

@@ -637,7 +637,7 @@ local function BuildParentPanel()
 
     local ver = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     ver:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    ver:SetText("v1.0.0 by MathWro  |  Select a category on the left.")
+    ver:SetText("v1.5.2 by MathWro  |  Select a category on the left.")
 
     return panel
 end

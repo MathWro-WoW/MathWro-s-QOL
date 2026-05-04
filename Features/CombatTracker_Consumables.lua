@@ -294,6 +294,10 @@ function consumables:Initialize()
     self.eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 
     self.eventFrame:SetScript("OnEvent", function(_, event)
+        local db = addon.db.combatTracker
+        local frameDb = db and db.frames and db.frames.consumables
+        if not db.enabled or not frameDb.enabled then return end
+
         if event == "BAG_UPDATE" then
             -- Debounce: BAG_UPDATE fires 50-100x per loot event; coalesce into one scan
             if self.bagScanPending then return end

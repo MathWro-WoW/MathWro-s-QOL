@@ -117,16 +117,22 @@ function trinkets:Initialize()
     self.eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 
     self.eventFrame:SetScript("OnEvent", function(_, event, slotID)
+        local db = addon.db.combatTracker
+        local frameDb = db and db.frames and db.frames.trinkets
+
         if event == "PLAYER_ENTERING_WORLD" then
             -- At PLAYER_LOGIN the inventory API isn't ready yet; this event fires
             -- after all equipment data is available, giving us a reliable first scan.
+            if not db.enabled or not frameDb.enabled then return end
             self:RebuildIcons()
         elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+            if not db.enabled or not frameDb.enabled then return end
             -- Only react to trinket slot changes
             if slotID == 13 or slotID == 14 then
                 self:RebuildIcons()
             end
         elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" then
+            if not db.enabled or not frameDb.enabled then return end
             if not self._cdPending then
                 self._cdPending = true
                 C_Timer.After(0, function()
