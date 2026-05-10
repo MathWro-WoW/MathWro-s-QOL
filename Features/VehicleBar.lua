@@ -22,6 +22,7 @@ end
 
 -- Guard flag to prevent our own RegisterStateDriver calls from re-triggering the hook.
 local applying = false
+local suppressVehicleShow = false
 
 local function getActiveVehicleBarIndex()
     if HasOverrideActionBar() then
@@ -100,18 +101,29 @@ local function forceHideEnabledBars()
 end
 
 local function updateEnabledBarsForVehicleState()
-    if isVehicleLikeWithAbilities() then
+    if not suppressVehicleShow and isVehicleLikeWithAbilities() then
         forceShowEnabledBars()
     else
         forceHideEnabledBars()
     end
 end
 
-local function scheduleVehicleStateRefresh()
-    if not C_Timer or not C_Timer.After then return end
-    C_Timer.After(0, updateEnabledBarsForVehicleState)
-    C_Timer.After(0.25, updateEnabledBarsForVehicleState)
-    C_Timer.After(1, updateEnabledBarsForVehicleState)
+local function onVehicleStateEvent(event)
+    if event == "UNIT_EXITING_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
+        suppressVehicleShow = true
+        forceHideEnabledBars()
+        return
+    end
+
+    if event == "UNIT_ENTERING_VEHICLE"
+        or event == "UNIT_ENTERED_VEHICLE"
+        or HasOverrideActionBar()
+        or not (HasVehicleActionBar() or IsPossessBarVisible() or UnitExists("vehicle"))
+    then
+        suppressVehicleShow = false
+    end
+
+    updateEnabledBarsForVehicleState()
 end
 
 local debugEvents
@@ -205,6 +217,7 @@ local function printVehicleDiagnostics(reason)
     debugPrint("diagnostic reason=" .. valueText(reason))
     debugPrint("feature enabled=" .. boolText(db and db.enabled))
     printStateLine("state")
+    debugPrint("suppress vehicle show=" .. boolText(suppressVehicleShow))
     debugPrint("active vehicle bar index=" .. valueText(getActiveVehicleBarIndex()))
     debugPrint("detector vehicleLikeWithAbilities=" .. boolText(isVehicleLikeWithAbilities()))
 
@@ -237,10 +250,14 @@ local function toggleVehicleDebugWatcher()
 
     debugEvents = CreateFrame("Frame")
     debugEvents:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR")
+    debugEvents:RegisterEvent("UPDATE_POSSESS_BAR")
+    debugEvents:RegisterEvent("UPDATE_VEHICLE_ACTIONBAR")
     debugEvents:RegisterEvent("VEHICLE_UPDATE")
     debugEvents:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
     debugEvents:RegisterEvent("UPDATE_BONUS_ACTIONBAR")
+    debugEvents:RegisterUnitEvent("UNIT_ENTERING_VEHICLE", "player")
     debugEvents:RegisterUnitEvent("UNIT_ENTERED_VEHICLE", "player")
+    debugEvents:RegisterUnitEvent("UNIT_EXITING_VEHICLE", "player")
     debugEvents:RegisterUnitEvent("UNIT_EXITED_VEHICLE", "player")
     debugEvents:SetScript("OnEvent", function(self, event)
         printStateLine("event " .. event)
@@ -287,21 +304,25 @@ function VehicleBar:Initialize()
     end
 
     -- Force bars visible on vehicle-like entry; fade them back out on exit.
-    -- Some vehicle exit events fire before Blizzard clears the vehicle/override
-    -- action state, so each event also schedules delayed rechecks.
+    -- UNIT_EXITING/EXITED are authoritative exit signals; some vehicle APIs can
+    -- still report the old action bar briefly, so suppress re-show until a new
+    -- enter/override state or a fully cleared vehicle state is observed.
     local vehicleEvents = CreateFrame("Frame")
     vehicleEvents:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR")
+    vehicleEvents:RegisterEvent("UPDATE_POSSESS_BAR")
+    vehicleEvents:RegisterEvent("UPDATE_VEHICLE_ACTIONBAR")
     vehicleEvents:RegisterEvent("VEHICLE_UPDATE")
+    vehicleEvents:RegisterUnitEvent("UNIT_ENTERING_VEHICLE", "player")
     vehicleEvents:RegisterUnitEvent("UNIT_ENTERED_VEHICLE", "player")
+    vehicleEvents:RegisterUnitEvent("UNIT_EXITING_VEHICLE", "player")
     vehicleEvents:RegisterUnitEvent("UNIT_EXITED_VEHICLE", "player")
     vehicleEvents:SetScript("OnEvent", function(self, event)
-        updateEnabledBarsForVehicleState()
-        scheduleVehicleStateRefresh()
+        onVehicleStateEvent(event)
     end)
 
     -- Handle reload-while-already-in-vehicle-like-state.
+    suppressVehicleShow = false
     updateEnabledBarsForVehicleState()
-    scheduleVehicleStateRefresh()
 
     self:Apply()
 end
