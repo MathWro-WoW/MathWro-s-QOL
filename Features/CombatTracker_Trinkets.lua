@@ -7,6 +7,7 @@ local trinkets = {
     name       = "trinkets",
     buttons    = {},
     eventFrame = nil,
+    pendingItems = {},
 }
 
 function trinkets:GetIcons()
@@ -15,6 +16,28 @@ function trinkets:GetIcons()
         if btn:IsShown() then table.insert(visible, btn) end
     end
     return visible
+end
+
+local function getItemSpell(itemID)
+    if C_Item and C_Item.GetItemSpell then
+        return C_Item.GetItemSpell(itemID)
+    end
+    return GetItemSpell(itemID)
+end
+
+local function isItemDataCached(itemID)
+    if C_Item and C_Item.IsItemDataCachedByID then
+        return C_Item.IsItemDataCachedByID(itemID)
+    end
+    return GetItemInfo(itemID) ~= nil
+end
+
+local function requestItemData(itemID)
+    if not itemID then return end
+    trinkets.pendingItems[itemID] = true
+    if C_Item and C_Item.RequestLoadItemDataByID then
+        C_Item.RequestLoadItemDataByID(itemID)
+    end
 end
 
 -- Scans both trinket slots, builds an active list, updates button pool.
@@ -32,10 +55,16 @@ function trinkets:RebuildIcons()
     for _, slotID in ipairs(TRINKET_SLOTS) do
         local itemID = GetInventoryItemID("player", slotID)
         if itemID then
-            local spellName = GetItemSpell(itemID)
+            local spellName = getItemSpell(itemID)
             local isOnUse   = spellName ~= nil
-            if not frameDb.onUseOnly or isOnUse then
-                local icon = GetInventoryItemTexture("player", slotID)
+            local icon      = GetInventoryItemTexture("player", slotID)
+            local isCached  = isItemDataCached(itemID)
+
+            if not icon or not isCached then
+                requestItemData(itemID)
+            end
+
+            if icon and (not frameDb.onUseOnly or isOnUse) then
                 table.insert(active, { slotID = slotID, isOnUse = isOnUse, icon = icon })
             end
         end
@@ -111,23 +140,35 @@ end
 function trinkets:Initialize()
     local self = self
     self.eventFrame = CreateFrame("Frame")
+    self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
     self.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     self.eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
     self.eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 
-    self.eventFrame:SetScript("OnEvent", function(_, event, slotID)
+    self.eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         local db = addon.db.combatTracker
         local frameDb = db and db.frames and db.frames.trinkets
 
-        if event == "PLAYER_ENTERING_WORLD" then
-            -- At PLAYER_LOGIN the inventory API isn't ready yet; this event fires
-            -- after all equipment data is available, giving us a reliable first scan.
+        if event == "ITEM_DATA_LOAD_RESULT" then
+            local itemID = arg1
+            local success = arg2
+            if not db.enabled or not frameDb.enabled then return end
+            if itemID and self.pendingItems[itemID] then
+                self.pendingItems[itemID] = nil
+                if success ~= false then
+                    self:RebuildIcons()
+                end
+            end
+        elseif event == "PLAYER_ENTERING_WORLD" then
+            -- At PLAYER_LOGIN inventory/item data may not be ready. This scan
+            -- requests missing item data; ITEM_DATA_LOAD_RESULT drives the retry.
             if not db.enabled or not frameDb.enabled then return end
             self:RebuildIcons()
         elseif event == "PLAYER_EQUIPMENT_CHANGED" then
             if not db.enabled or not frameDb.enabled then return end
             -- Only react to trinket slot changes
+            local slotID = arg1
             if slotID == 13 or slotID == 14 then
                 self:RebuildIcons()
             end
