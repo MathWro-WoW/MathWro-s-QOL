@@ -23,13 +23,22 @@ end
 -- Guard flag to prevent our own RegisterStateDriver calls from re-triggering the hook.
 local applying = false
 
+local function getActiveVehicleBarIndex()
+    if HasOverrideActionBar() then
+        return GetOverrideBarIndex()
+    end
+
+    if HasVehicleActionBar() or IsPossessBarVisible() or UnitExists("vehicle") then
+        return GetVehicleBarIndex()
+    end
+
+    return nil
+end
+
 -- Returns true when an override or vehicle bar is active AND it has at least
 -- one populated action slot (filters out taxis, RP vehicles, etc.).
 local function isVehicleLikeWithAbilities()
-    if not (HasOverrideActionBar() or HasVehicleActionBar() or IsPossessBarVisible()) then
-        return false
-    end
-    local barIndex = GetOverrideBarIndex() or GetVehicleBarIndex()
+    local barIndex = getActiveVehicleBarIndex()
     if not barIndex then return false end
     local baseSlot = (barIndex - 1) * NUM_ACTIONBAR_BUTTONS
     for i = 1, NUM_ACTIONBAR_BUTTONS do
@@ -90,7 +99,169 @@ local function forceHideEnabledBars()
     end
 end
 
+local function updateEnabledBarsForVehicleState()
+    if isVehicleLikeWithAbilities() then
+        forceShowEnabledBars()
+    else
+        forceHideEnabledBars()
+    end
+end
+
+local function scheduleVehicleStateRefresh()
+    if not C_Timer or not C_Timer.After then return end
+    C_Timer.After(0, updateEnabledBarsForVehicleState)
+    C_Timer.After(0.25, updateEnabledBarsForVehicleState)
+    C_Timer.After(1, updateEnabledBarsForVehicleState)
+end
+
+local debugEvents
+
+local function debugPrint(text)
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99MQOL Vehicle:|r " .. text)
+    else
+        print("MQOL Vehicle: " .. text)
+    end
+end
+
+local function boolText(value)
+    return value and "true" or "false"
+end
+
+local function valueText(value)
+    if value == nil then return "nil" end
+    return tostring(value)
+end
+
+local function frameName(frame)
+    if not frame then return "nil" end
+    return frame.GetName and frame:GetName() or tostring(frame)
+end
+
+local function printStateLine(prefix)
+    debugPrint(prefix
+        .. " override=" .. boolText(HasOverrideActionBar())
+        .. " vehicleBar=" .. boolText(HasVehicleActionBar())
+        .. " possess=" .. boolText(IsPossessBarVisible())
+        .. " unitVehicle=" .. boolText(UnitExists("vehicle"))
+        .. " overrideIndex=" .. valueText(GetOverrideBarIndex())
+        .. " vehicleIndex=" .. valueText(GetVehicleBarIndex()))
+end
+
+local function printSlotSummary(label, barIndex)
+    if not barIndex then
+        debugPrint(label .. " slots: no bar index")
+        return
+    end
+
+    local baseSlot = (barIndex - 1) * NUM_ACTIONBAR_BUTTONS
+    local found = false
+    for i = 1, NUM_ACTIONBAR_BUTTONS do
+        local slot = baseSlot + i
+        if HasAction(slot) then
+            local actionType, id, subType = GetActionInfo(slot)
+            debugPrint(label .. " slot " .. i .. "/" .. slot
+                .. " type=" .. valueText(actionType)
+                .. " id=" .. valueText(id)
+                .. " subType=" .. valueText(subType))
+            found = true
+        end
+    end
+
+    if not found then
+        debugPrint(label .. " slots: no populated actions")
+    end
+end
+
+local function printBarSummary(index)
+    local bar = _G["ElvUI_Bar" .. index]
+    if not bar then
+        debugPrint("bar" .. index .. ": frame missing")
+        return
+    end
+
+    local db = bar.db
+    debugPrint("bar" .. index
+        .. " shown=" .. boolText(bar:IsShown())
+        .. " visible=" .. boolText(bar:IsVisible())
+        .. " alpha=" .. valueText(bar:GetAlpha())
+        .. " mouseover=" .. boolText(bar.mouseover)
+        .. " parent=" .. frameName(bar:GetParent())
+        .. " pageAttr=" .. valueText(bar:GetAttribute("page"))
+        .. " dbEnabled=" .. boolText(db and db.enabled)
+        .. " dbAlpha=" .. valueText(db and db.alpha)
+        .. " inheritGlobalFade=" .. boolText(db and db.inheritGlobalFade))
+
+    if db and db.visibility then
+        debugPrint("bar" .. index .. " visibility=" .. db.visibility)
+    end
+end
+
+local function printVehicleDiagnostics(reason)
+    local E = ElvUI and ElvUI[1]
+    local AB = E and E:GetModule("ActionBars", true)
+    local db = addon.db and addon.db.vehicleBar
+
+    debugPrint("diagnostic reason=" .. valueText(reason))
+    debugPrint("feature enabled=" .. boolText(db and db.enabled))
+    printStateLine("state")
+    debugPrint("active vehicle bar index=" .. valueText(getActiveVehicleBarIndex()))
+    debugPrint("detector vehicleLikeWithAbilities=" .. boolText(isVehicleLikeWithAbilities()))
+
+    if AB and AB.fadeParent then
+        debugPrint("fadeParent alpha=" .. valueText(AB.fadeParent:GetAlpha())
+            .. " mouseLock=" .. boolText(AB.fadeParent.mouseLock))
+    else
+        debugPrint("fadeParent unavailable")
+    end
+
+    if db and db.bars then
+        for i, enabled in pairs(db.bars) do
+            if enabled then
+                printBarSummary(i)
+            end
+        end
+    end
+
+    printSlotSummary("override", GetOverrideBarIndex())
+    printSlotSummary("vehicle", GetVehicleBarIndex())
+end
+
+local function toggleVehicleDebugWatcher()
+    if debugEvents then
+        debugEvents:UnregisterAllEvents()
+        debugEvents = nil
+        debugPrint("event watch disabled")
+        return
+    end
+
+    debugEvents = CreateFrame("Frame")
+    debugEvents:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR")
+    debugEvents:RegisterEvent("VEHICLE_UPDATE")
+    debugEvents:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
+    debugEvents:RegisterEvent("UPDATE_BONUS_ACTIONBAR")
+    debugEvents:RegisterUnitEvent("UNIT_ENTERED_VEHICLE", "player")
+    debugEvents:RegisterUnitEvent("UNIT_EXITED_VEHICLE", "player")
+    debugEvents:SetScript("OnEvent", function(self, event)
+        printStateLine("event " .. event)
+    end)
+    debugPrint("event watch enabled")
+end
+
+addon.DebugVehicleBar = function(message)
+    if message and message:match("^%s*watch%s*$") then
+        toggleVehicleDebugWatcher()
+    else
+        printVehicleDiagnostics(message)
+    end
+end
+
 function VehicleBar:Initialize()
+    SLASH_MQOLVEHICLEDEBUG1 = "/mqolvehicledebug"
+    SlashCmdList["MQOLVEHICLEDEBUG"] = function(message)
+        addon.DebugVehicleBar(message)
+    end
+
     -- Hook RegisterStateDriver to strip vehicle hide conditions from visibility drivers.
     hooksecurefunc("RegisterStateDriver", onStateDriverRegistered)
 
@@ -116,25 +287,21 @@ function VehicleBar:Initialize()
     end
 
     -- Force bars visible on vehicle-like entry; fade them back out on exit.
-    -- UPDATE_OVERRIDE_ACTIONBAR fires on both override bar entry and exit.
-    -- UNIT_ENTERED_VEHICLE / UNIT_EXITED_VEHICLE cover traditional vehicle UI.
+    -- Some vehicle exit events fire before Blizzard clears the vehicle/override
+    -- action state, so each event also schedules delayed rechecks.
     local vehicleEvents = CreateFrame("Frame")
     vehicleEvents:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR")
     vehicleEvents:RegisterEvent("VEHICLE_UPDATE")
     vehicleEvents:RegisterUnitEvent("UNIT_ENTERED_VEHICLE", "player")
     vehicleEvents:RegisterUnitEvent("UNIT_EXITED_VEHICLE", "player")
     vehicleEvents:SetScript("OnEvent", function(self, event)
-        if isVehicleLikeWithAbilities() then
-            forceShowEnabledBars()
-        else
-            forceHideEnabledBars()
-        end
+        updateEnabledBarsForVehicleState()
+        scheduleVehicleStateRefresh()
     end)
 
     -- Handle reload-while-already-in-vehicle-like-state.
-    if isVehicleLikeWithAbilities() then
-        forceShowEnabledBars()
-    end
+    updateEnabledBarsForVehicleState()
+    scheduleVehicleStateRefresh()
 
     self:Apply()
 end

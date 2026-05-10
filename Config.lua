@@ -1775,6 +1775,47 @@ local function BuildDebugPanel()
 
     card:SetBottomWidget(buttons, 10)
 
+    local vehicleCard, vehicleContent = MakeCard(
+        sc,
+        card,
+        "Vehicle Bar",
+        "Prints ElvUI action bar, vehicle state, and action slot diagnostics to the chat frame."
+    )
+
+    local vehicleButtons = CreateFrame("Frame", nil, vehicleContent)
+    vehicleButtons:SetPoint("TOPLEFT", vehicleContent, "TOPLEFT", 12, -2)
+    vehicleButtons:SetSize(430, 28)
+
+    local function runVehicleDebug(message)
+        if addon.DebugVehicleBar then
+            addon.DebugVehicleBar(message)
+        elseif DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99MQOL Vehicle:|r diagnostic unavailable; VehicleBar did not finish loading")
+        else
+            print("MQOL Vehicle: diagnostic unavailable; VehicleBar did not finish loading")
+        end
+    end
+
+    local vehicleStateBtn = CreateFrame("Button", nil, vehicleButtons, "UIPanelButtonTemplate")
+    vehicleStateBtn:SetSize(120, 22)
+    vehicleStateBtn:SetPoint("TOPLEFT", vehicleButtons, "TOPLEFT", 0, 0)
+    vehicleStateBtn:SetText("Print State")
+    if S then S:HandleButton(vehicleStateBtn) end
+    vehicleStateBtn:SetScript("OnClick", function()
+        runVehicleDebug("button")
+    end)
+
+    local vehicleWatchBtn = CreateFrame("Button", nil, vehicleButtons, "UIPanelButtonTemplate")
+    vehicleWatchBtn:SetSize(130, 22)
+    vehicleWatchBtn:SetPoint("LEFT", vehicleStateBtn, "RIGHT", 8, 0)
+    vehicleWatchBtn:SetText("Toggle Watch")
+    if S then S:HandleButton(vehicleWatchBtn) end
+    vehicleWatchBtn:SetScript("OnClick", function()
+        runVehicleDebug("watch")
+    end)
+
+    vehicleCard:SetBottomWidget(vehicleButtons, 10)
+
     return panel
 end
 
