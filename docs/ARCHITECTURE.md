@@ -18,7 +18,7 @@ All AI instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instruction
 Loaded before `Core.lua`:
 
 - `Libs\LibStub\LibStub.lua`
-- `Libs\LibEditMode\LibEditMode.lua` — enables native Edit Mode glow + drag for custom frames
+- `Libs\LibEditMode\LibEditMode.lua` plus `pools.lua` and `widgets\*.lua` — enables native Edit Mode glow + drag for custom frames
 
 ---
 
@@ -28,19 +28,29 @@ Defined in `MathWroQOL.toc`:
 
 1. `Libs\LibStub\LibStub.lua`
 2. `Libs\LibEditMode\LibEditMode.lua`
-3. `Core.lua`
-4. `Config.lua`
-5. `Features\VehicleBar.lua`
-6. `Features\BuffHealthColor.lua`
-7. `Features\GameMenu.lua`
-8. `Features\CDMButton.lua`
-9. `Features\AuctionFilter.lua`
-10. `Features\CombatLog.lua`
-11. `Features\EditModeNudge.lua`
-12. `Features\CombatTracker.lua`
-13. `Features\CombatTracker_Racials.lua`
-14. `Features\CombatTracker_Trinkets.lua`
-15. `Features\CombatTracker_Consumables.lua`
+3. `Libs\LibEditMode\pools.lua`
+4. `Libs\LibEditMode\widgets\button.lua`
+5. `Libs\LibEditMode\widgets\checkbox.lua`
+6. `Libs\LibEditMode\widgets\dialog.lua`
+7. `Libs\LibEditMode\widgets\divider.lua`
+8. `Libs\LibEditMode\widgets\dropdown.lua`
+9. `Libs\LibEditMode\widgets\expander.lua`
+10. `Libs\LibEditMode\widgets\extension.lua`
+11. `Libs\LibEditMode\widgets\slider.lua`
+12. `Libs\LibEditMode\widgets\colorpicker.lua`
+13. `Core.lua`
+14. `Config.lua`
+15. `Features\VehicleBar.lua`
+16. `Features\BuffHealthColor.lua`
+17. `Features\GameMenu.lua`
+18. `Features\CDMButton.lua`
+19. `Features\AuctionFilter.lua`
+20. `Features\CombatLog.lua`
+21. `Features\EditModeNudge.lua`
+22. `Features\CombatTracker.lua`
+23. `Features\CombatTracker_Racials.lua`
+24. `Features\CombatTracker_Trinkets.lua`
+25. `Features\CombatTracker_Consumables.lua`
 
 ---
 
@@ -111,7 +121,7 @@ Four surfaces to wire:
 | CDM Button | `CDMButton.lua` | `cdmButton` | Injects CDM button into Escape menu; `/wa` and `/cm` slashes |
 | Auction Filter | `AuctionFilter.lua` | `auctionFilter` | Pre-enables AH filters on open |
 | Combat Log | `CombatLog.lua` | `combatLog` | Auto-starts/stops combat logging by instance type and level cap |
-| Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Arrow buttons + coordinate display for Edit Mode frames |
+| Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Arrow buttons + coordinate display for native Edit Mode frames and LibEditMode-registered custom frames |
 | Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring for configured player-cast buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs. Each buff profile has frame, color, and specialization filters. Built-ins expose only relevant class specs; custom IDs infer spec filters from the player spellbook when possible |
 | Combat Tracker | `CombatTracker.lua` + 3 section files | `combatTracker` | Cooldown icon display system (racials, trinkets, consumables) |
 

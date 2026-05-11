@@ -297,19 +297,6 @@ function CT:CreateSectionFrame(key)
             x     = frameDb.x or 0,
             y     = frameDb.y or 0,
         }, displayName)
-
-        -- Hook the LibEditMode selection overlay so clicking it also attaches
-        -- the EditModeNudge overlay (native WoW frames do this via AttachToSystemFrame).
-        if LibEditMode.frameSelections then
-            local sel = LibEditMode.frameSelections[frame]
-            if sel then
-                sel:HookScript("OnMouseDown", function()
-                    if addon.editModeNudge and addon.editModeNudge.AttachToFrame then
-                        addon.editModeNudge:AttachToFrame(frame)
-                    end
-                end)
-            end
-        end
     end
 
     return frame
