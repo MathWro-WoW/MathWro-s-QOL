@@ -36,7 +36,7 @@ local function NormalizeCoord(value)
     return math.ceil(value - 0.5)
 end
 
-local function MoveSelectedFrameBy(dx, dy)
+local function MoveSelectedFrameBy(dx, dy, movementKeySteps)
     if not selectedFrame or ((dx == 0) and (dy == 0)) then return end
 
     if selectedLibEditModeSelection then
@@ -49,8 +49,8 @@ local function MoveSelectedFrameBy(dx, dy)
     end
 
     if selectedFrame.ProcessMovementKey then
-        local xSteps = math.floor(math.abs(dx) + 0.5)
-        local ySteps = math.floor(math.abs(dy) + 0.5)
+        local xSteps = dx ~= 0 and (movementKeySteps or math.floor(math.abs(dx) + 0.5)) or 0
+        local ySteps = dy ~= 0 and (movementKeySteps or math.floor(math.abs(dy) + 0.5)) or 0
         local xDirection = dx > 0 and "RIGHT" or "LEFT"
         local yDirection = dy > 0 and "UP" or "DOWN"
 
@@ -156,11 +156,14 @@ local function CreateArrowButton(parent, direction)
 
     btn:SetScript("OnClick", function()
         if not selectedFrame then return end
-        local amount = IsShiftKeyDown() and 10 or 1
+        local shiftHeld = IsShiftKeyDown()
+        local amount = shiftHeld and 10 or 1
         local dx = (direction == "RIGHT" and amount) or (direction == "LEFT" and -amount) or 0
         local dy = (direction == "UP"    and amount) or (direction == "DOWN" and -amount) or 0
+        -- Native Edit Mode movement already applies the Shift multiplier.
+        local movementKeySteps = shiftHeld and 1 or nil
 
-        MoveSelectedFrameBy(dx, dy)
+        MoveSelectedFrameBy(dx, dy, movementKeySteps)
     end)
 
     return btn
