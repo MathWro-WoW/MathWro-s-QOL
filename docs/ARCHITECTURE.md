@@ -7,7 +7,7 @@ All AI instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instruction
 
 ## Interface Version & TOC
 
-- Target: `120001` (Midnight 12.0.1). **Single value only** — the BigWigs packager breaks on comma-separated values.
+- Target: `120005` (Midnight 12.0.5). **Single value only** — the BigWigs packager breaks on comma-separated values.
 - The `.toc` filename must exactly match the addon folder name: `MathWroQOL.toc` inside `MathWroQOL/`. Mismatch = addon invisible in-game.
 - Any hardcoded addon name strings (e.g. `ADDON_LOADED` checks) must use `"MathWroQOL"`.
 - Optional addon integrations are declared via `## OptionalDeps:` so ElvUI, Masque, and CooldownManagerCentered load first when present.

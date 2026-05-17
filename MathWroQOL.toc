@@ -1,4 +1,4 @@
-## Interface: 120001
+## Interface: 120005
 ## Title: MathWro QOL
 ## Notes: Quality of Life improvements by MathWro
 ## Author: MathWro
