@@ -4,6 +4,7 @@
 ## Author: MathWro
 ## Version: @project-version@
 ## X-Curse-Project-ID: 1482222
+## OptionalDeps: ElvUI, Masque, CooldownManagerCentered
 ## SavedVariables: MathWroQOLDB
 
 Libs\LibStub\LibStub.lua
@@ -24,6 +25,7 @@ Features\VehicleBar.lua
 Features\BuffHealthColor.lua
 Features\GameMenu.lua
 Features\CDMButton.lua
+Features\CMCMasque.lua
 Features\AuctionFilter.lua
 Features\CombatLog.lua
 Features\EditModeNudge.lua

@@ -5,6 +5,13 @@ local function ElvSkin()
     return ElvUI[1]:GetModule("Skins")
 end
 
+local function IsAddonLoaded(name)
+    if C_AddOns and C_AddOns.IsAddOnLoaded then
+        return C_AddOns.IsAddOnLoaded(name)
+    end
+    return IsAddOnLoaded and IsAddOnLoaded(name)
+end
+
 local function ApplyFrameBackdrop(frame, useFadeColor)
     frame:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8X8",
@@ -1667,6 +1674,133 @@ local function BuildElvUIPanel()
     return panel
 end
 
+local function BuildCDMPluginsPanel()
+    local panel = CreateFrame("Frame")
+    panel.name = "CDM Plugins"
+
+    local sc = MakePanelScaffold(panel, "CDM Plugins", "MathWroQOL_CDMPluginsScroll")
+    local cmcLoaded = IsAddonLoaded("CooldownManagerCentered")
+    local masqueLoaded = LibStub and LibStub("Masque", true) ~= nil
+    local available = cmcLoaded and masqueLoaded
+
+    local rootAnchor = CreateFrame("Frame", nil, sc)
+    rootAnchor:SetSize(1, 1)
+    rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
+
+    local card, content = MakeCard(
+        sc,
+        rootAnchor,
+        "Centered Cooldown Manager",
+        "Register CooldownManagerCentered icon viewers with Masque for external icon skinning."
+    )
+
+    local notice
+    if not available then
+        notice = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        notice:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
+        notice:SetTextColor(1, 0.3, 0.3)
+        if not cmcLoaded and not masqueLoaded then
+            notice:SetText("CooldownManagerCentered and Masque are not loaded. These options are unavailable.")
+        elseif not cmcLoaded then
+            notice:SetText("CooldownManagerCentered is not loaded. These options are unavailable.")
+        else
+            notice:SetText("Masque is not loaded. These options are unavailable.")
+        end
+    end
+
+    local enabledCB = MakeCheckbox(content, "Enable Masque skinning", 0, 0,
+        function()
+            return addon.db.cmcMasque and addon.db.cmcMasque.enabled == true
+        end,
+        function(val)
+            if addon.db.cmcMasque then
+                addon.db.cmcMasque.enabled = val
+                addon:NotifyFeature("cmcMasque")
+            end
+        end
+    )
+    enabledCB:ClearAllPoints()
+    if notice then
+        enabledCB:SetPoint("TOPLEFT", notice, "BOTTOMLEFT", -4, -8)
+    else
+        enabledCB:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
+    end
+
+    local viewerContainer = CreateFrame("Frame", nil, content)
+    viewerContainer:SetPoint("TOPLEFT", enabledCB, "BOTTOMLEFT", 20, -6)
+    viewerContainer:SetSize(430, 96)
+
+    local viewerLabel = viewerContainer:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    viewerLabel:SetPoint("TOPLEFT", viewerContainer, "TOPLEFT", 0, 0)
+    viewerLabel:SetText("Icon viewers:")
+
+    local essentialCB = MakeCheckbox(viewerContainer, "Essential icons", 0, 0,
+        function()
+            return addon.db.cmcMasque
+                and addon.db.cmcMasque.viewers
+                and addon.db.cmcMasque.viewers.essential == true
+        end,
+        function(val)
+            if addon.db.cmcMasque and addon.db.cmcMasque.viewers then
+                addon.db.cmcMasque.viewers.essential = val
+                addon:NotifyFeature("cmcMasque")
+            end
+        end
+    )
+    essentialCB:ClearAllPoints()
+    essentialCB:SetPoint("TOPLEFT", viewerLabel, "BOTTOMLEFT", -4, -6)
+
+    local utilityCB = MakeCheckbox(viewerContainer, "Utility icons", 0, 0,
+        function()
+            return addon.db.cmcMasque
+                and addon.db.cmcMasque.viewers
+                and addon.db.cmcMasque.viewers.utility == true
+        end,
+        function(val)
+            if addon.db.cmcMasque and addon.db.cmcMasque.viewers then
+                addon.db.cmcMasque.viewers.utility = val
+                addon:NotifyFeature("cmcMasque")
+            end
+        end
+    )
+    utilityCB:ClearAllPoints()
+    utilityCB:SetPoint("TOPLEFT", essentialCB, "BOTTOMLEFT", 0, -4)
+
+    local buffIconsCB = MakeCheckbox(viewerContainer, "Buff icons", 0, 0,
+        function()
+            return addon.db.cmcMasque
+                and addon.db.cmcMasque.viewers
+                and addon.db.cmcMasque.viewers.buffIcons == true
+        end,
+        function(val)
+            if addon.db.cmcMasque and addon.db.cmcMasque.viewers then
+                addon.db.cmcMasque.viewers.buffIcons = val
+                addon:NotifyFeature("cmcMasque")
+            end
+        end
+    )
+    buffIconsCB:ClearAllPoints()
+    buffIconsCB:SetPoint("TOPLEFT", utilityCB, "BOTTOMLEFT", 0, -4)
+
+    local function updateGatekeeper()
+        local enabled = available and addon.db.cmcMasque and addon.db.cmcMasque.enabled == true
+        SetChildrenEnabled(viewerContainer, enabled)
+    end
+    enabledCB:HookScript("OnClick", updateGatekeeper)
+
+    if not available then
+        enabledCB:Disable()
+        enabledCB:SetAlpha(0.4)
+        SetChildrenEnabled(viewerContainer, false)
+    else
+        updateGatekeeper()
+    end
+
+    card:SetBottomWidget(viewerContainer, 10)
+
+    return panel
+end
+
 local function BuildEditModePanel()
     local panel = CreateFrame("Frame")
     panel.name = "Edit Mode"
@@ -2785,6 +2919,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
     local combatLogPanel = BuildCombatLogPanel()
     local combatTrackerPanel = BuildCombatTrackerPanel()
     local elvuiPanel = BuildElvUIPanel()
+    local cdmPluginsPanel = BuildCDMPluginsPanel()
     local editModePanel = BuildEditModePanel()
     local debugPanel = BuildDebugPanel()
 
@@ -2794,6 +2929,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatLogPanel, combatLogPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatTrackerPanel, combatTrackerPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel, elvuiPanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, cdmPluginsPanel, cdmPluginsPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, editModePanel, editModePanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, debugPanel, debugPanel.name)
         Settings.RegisterAddOnCategory(parentCat)
@@ -2808,6 +2944,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         InterfaceOptions_AddCategory(combatLogPanel, parentPanel)
         InterfaceOptions_AddCategory(combatTrackerPanel, parentPanel)
         InterfaceOptions_AddCategory(elvuiPanel, parentPanel)
+        InterfaceOptions_AddCategory(cdmPluginsPanel, parentPanel)
         InterfaceOptions_AddCategory(editModePanel, parentPanel)
         InterfaceOptions_AddCategory(debugPanel, parentPanel)
 

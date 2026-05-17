@@ -122,6 +122,14 @@ local defaults = {
         slashWA = false,
         slashCM = false,
     },
+    cmcMasque = {
+        enabled = false,
+        viewers = {
+            essential = true,
+            utility = true,
+            buffIcons = true,
+        },
+    },
     auctionFilter = {
         currentExpansionOnly = false,
         usableOnly = false,

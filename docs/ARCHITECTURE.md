@@ -10,6 +10,7 @@ All AI instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instruction
 - Target: `120001` (Midnight 12.0.1). **Single value only** — the BigWigs packager breaks on comma-separated values.
 - The `.toc` filename must exactly match the addon folder name: `MathWroQOL.toc` inside `MathWroQOL/`. Mismatch = addon invisible in-game.
 - Any hardcoded addon name strings (e.g. `ADDON_LOADED` checks) must use `"MathWroQOL"`.
+- Optional addon integrations are declared via `## OptionalDeps:` so ElvUI, Masque, and CooldownManagerCentered load first when present.
 
 ---
 
@@ -44,13 +45,14 @@ Defined in `MathWroQOL.toc`:
 16. `Features\BuffHealthColor.lua`
 17. `Features\GameMenu.lua`
 18. `Features\CDMButton.lua`
-19. `Features\AuctionFilter.lua`
-20. `Features\CombatLog.lua`
-21. `Features\EditModeNudge.lua`
-22. `Features\CombatTracker.lua`
-23. `Features\CombatTracker_Racials.lua`
-24. `Features\CombatTracker_Trinkets.lua`
-25. `Features\CombatTracker_Consumables.lua`
+19. `Features\CMCMasque.lua`
+20. `Features\AuctionFilter.lua`
+21. `Features\CombatLog.lua`
+22. `Features\EditModeNudge.lua`
+23. `Features\CombatTracker.lua`
+24. `Features\CombatTracker_Racials.lua`
+25. `Features\CombatTracker_Trinkets.lua`
+26. `Features\CombatTracker_Consumables.lua`
 
 ---
 
@@ -119,6 +121,7 @@ Four surfaces to wire:
 | Vehicle Bar | `VehicleBar.lua` | `vehicleBar` | ElvUI-only; keeps action bars visible in vehicle encounters |
 | Game Menu | `GameMenu.lua` | `gameMenu` | Drag, scale, persist position of Escape menu |
 | CDM Button | `CDMButton.lua` | `cdmButton` | Injects CDM button into Escape menu; `/wa` and `/cm` slashes |
+| CMC Masque | `CMCMasque.lua` | `cmcMasque` | Registers CooldownManagerCentered Essential, Utility, and Buff Icon viewer buttons with Masque when both addons are loaded |
 | Auction Filter | `AuctionFilter.lua` | `auctionFilter` | Pre-enables AH filters on open |
 | Combat Log | `CombatLog.lua` | `combatLog` | Auto-starts/stops combat logging by instance type and level cap |
 | Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Arrow buttons + coordinate display for native Edit Mode frames and LibEditMode-registered custom frames |
@@ -174,6 +177,7 @@ Settings panels registered via `Settings.RegisterCanvasLayoutCategory` / `Settin
   - **General** — GameMenu scaling / drag / reset position; CombatLog instance toggles + level filter
   - **Combat Tracker** — master enable; per-section collapsible blocks (Racials, Trinkets, Consumables)
   - **ElvUI Plugins** — VehicleBar per-bar visibility toggles
+  - **CDM Plugins** — CooldownManagerCentered compatibility options such as Masque skinning
   - **Edit Mode** — EditModeNudge enable toggle
   - **Debug** — troubleshooting actions such as Buff Health Color unit diagnostics
 
