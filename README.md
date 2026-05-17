@@ -47,6 +47,11 @@ Keep selected action bars (1–10) visible during vehicle combat and override ba
 **Buff Health Color**
 Recolor selected ElvUI unit frame health bars while units have configured player-cast buffs. Includes per-buff settings for Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, plus custom spell IDs that add more buff profiles alongside the built-ins. Each buff can be enabled, colored, assigned to player, target, party, or ElvUI raid frame sizes, and restricted to relevant player specializations independently. Built-ins only expose specs from the class that can use the spell; single-spec spells such as Beacon of the Savior load in that spec automatically, while Prayer of Mending can be configured for Discipline and/or Holy Priest. Custom spell IDs are added from the buff profile dropdown via "Add custom ID..." and infer relevant specs from the player spellbook when possible, falling back to all-spec manual configuration when the spell is not discoverable.
 
+### CDM Plugins *(requires CooldownManagerCentered and Masque)*
+
+**Centered Cooldown Manager Masque Skinning**
+Registers CooldownManagerCentered's icon viewers with Masque so their icons can use the same skins as the rest of the UI. The Essential, Utility, and Buff Icons viewers can be enabled independently in the options panel. When enabled, three groups appear in Masque under MathWroQOL: CMC Essential, CMC Utility, and CMC Buff Icons.
+
 ### Debug
 
 **Buff Health Color Diagnostics**
