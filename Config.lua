@@ -1950,6 +1950,45 @@ local function BuildDebugPanel()
 
     vehicleCard:SetBottomWidget(vehicleButtons, 10)
 
+    local nameplateCard, nameplateContent = MakeCard(
+        sc,
+        vehicleCard,
+        "Nameplate Diagnostics",
+        "Watches nameplate visibility CVars and prints the most likely Lua caller or internal/keybind source to chat."
+    )
+
+    local nameplateControls = CreateFrame("Frame", nil, nameplateContent)
+    nameplateControls:SetPoint("TOPLEFT", nameplateContent, "TOPLEFT", 12, -2)
+    nameplateControls:SetSize(430, 56)
+
+    local nameplateEnableCB = MakeCheckbox(nameplateControls, "Enable nameplate watch", 0, 0,
+        function()
+            return addon.db.nameplateDiagnostics and addon.db.nameplateDiagnostics.enabled == true
+        end,
+        function(value)
+            addon.db.nameplateDiagnostics = addon.db.nameplateDiagnostics or {}
+            addon.db.nameplateDiagnostics.enabled = value
+            addon:NotifyFeature("nameplateDiagnostics")
+        end
+    )
+
+    local nameplateStatusBtn = CreateFrame("Button", nil, nameplateControls, "UIPanelButtonTemplate")
+    nameplateStatusBtn:SetSize(120, 22)
+    nameplateStatusBtn:SetPoint("TOPLEFT", nameplateEnableCB, "BOTTOMLEFT", 0, -8)
+    nameplateStatusBtn:SetText("Print Status")
+    if S then S:HandleButton(nameplateStatusBtn) end
+    nameplateStatusBtn:SetScript("OnClick", function()
+        if addon.DebugNameplateDiagnostics then
+            addon.DebugNameplateDiagnostics("button")
+        elseif DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99MQOL Nameplates:|r diagnostic unavailable; NameplateDiagnostics did not finish loading")
+        else
+            print("MQOL Nameplates: diagnostic unavailable; NameplateDiagnostics did not finish loading")
+        end
+    end)
+
+    nameplateCard:SetBottomWidget(nameplateControls, 10)
+
     return panel
 end
 

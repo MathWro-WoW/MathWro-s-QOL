@@ -145,6 +145,9 @@ local defaults = {
     editModeNudge = {
         enabled = false,
     },
+    nameplateDiagnostics = {
+        enabled = false,
+    },
     combatTracker = {
         enabled = false,
         frames = {

@@ -29,6 +29,7 @@ Features\CMCMasque.lua
 Features\AuctionFilter.lua
 Features\CombatLog.lua
 Features\EditModeNudge.lua
+Features\NameplateDiagnostics.lua
 Features\CombatTracker.lua
 Features\CombatTracker_Racials.lua
 Features\CombatTracker_Trinkets.lua
