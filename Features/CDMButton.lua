@@ -22,8 +22,12 @@ local function positionCDMButton()
     if GameMenuFrame.ElvUI then
         -- ElvUI is loaded: group CDM directly below the ElvUI button.
         anchorBtn = GameMenuFrame.ElvUI
+    elseif _G.EllesmereUI_UnlockMenuButton and _G.EllesmereUI_UnlockMenuButton:IsShown() then
+        anchorBtn = _G.EllesmereUI_UnlockMenuButton
+    elseif _G.EllesmereUI_GameMenuButton and _G.EllesmereUI_GameMenuButton:IsShown() then
+        anchorBtn = _G.EllesmereUI_GameMenuButton
     elseif GameMenuFrame.buttonPool then
-        -- No ElvUI: find the Shop (BLIZZARD_STORE) button from the active pool.
+        -- No suite-specific button: find Shop in the active Blizzard pool.
         local storeText = _G.BLIZZARD_STORE
         if storeText then
             for button in GameMenuFrame.buttonPool:EnumerateActive() do
@@ -50,13 +54,14 @@ local function positionCDMButton()
             if top and top <= anchorBottom + 1 then
                 local point, relativeTo, relativePoint, x, y = button:GetPoint()
                 if point then
+                    button:ClearAllPoints()
                     button:SetPoint(point, relativeTo, relativePoint, x, y - 45)
                 end
             end
         end
     end
 
-    -- Expand frame to fit the extra button (35px height + 10px gap, matching ElvUI spacing).
+    -- Expand the frame to fit the extra button and its gap.
     GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + 45)
 end
 
@@ -71,9 +76,8 @@ function CDMButton:Apply()
 end
 
 function CDMButton:Initialize()
-    local db = addon.db.cdmButton
 
-    -- Use the same template and size as ElvUI's retail game menu button.
+    -- Use Retail's native game menu button template.
     btn = CreateFrame("Button", "MathWroQOL_CDMButton", GameMenuFrame, "MainMenuFrameButtonTemplate")
     btn:SetSize(200, 35)
     btn:SetText("CDM")
@@ -105,6 +109,15 @@ function CDMButton:Initialize()
             end
         end)
         GameMenuFrame._mqolCDMSkinHooked = true
+    end
+
+    -- Use EllesmereUI's public third-party skin API when ElvUI is not the
+    -- active provider. The callback also tracks later EllesmereUI theme changes.
+    if not ElvUI and EllesmereUI and EllesmereUI.RegisterSkin then
+        EllesmereUI.RegisterSkin("MathWroQOL", function(S)
+            S.Button(btn)
+            S.WhiteButtonLabel(btn)
+        end)
     end
 
     -- Register slash commands; toggled by db flag at invocation time.

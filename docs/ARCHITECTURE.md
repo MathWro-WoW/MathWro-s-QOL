@@ -10,7 +10,7 @@ All AI instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instruction
 - Target: `120005` (Midnight 12.0.5). **Single value only** — the BigWigs packager breaks on comma-separated values.
 - The `.toc` filename must exactly match the addon folder name: `MathWroQOL.toc` inside `MathWroQOL/`. Mismatch = addon invisible in-game.
 - Any hardcoded addon name strings (e.g. `ADDON_LOADED` checks) must use `"MathWroQOL"`.
-- Optional addon integrations are declared via `## OptionalDeps:` so ElvUI, Masque, and CooldownManagerCentered load first when present.
+- Optional addon integrations are declared via `## OptionalDeps:` so ElvUI, EllesmereUI modules, Masque, and CooldownManagerCentered load first when present.
 
 ---
 
@@ -118,14 +118,14 @@ Four surfaces to wire:
 
 | Feature | File(s) | DB key | Notes |
 |---|---|---|---|
-| Vehicle Bar | `VehicleBar.lua` | `vehicleBar` | ElvUI-only; keeps action bars visible in vehicle encounters |
+| Vehicle Bar | `VehicleBar.lua` | `vehicleBar` | ElvUI and EllesmereUI Action Bars integration; keeps selected action bars visible in vehicle encounters |
 | Game Menu | `GameMenu.lua` | `gameMenu` | Drag, scale, persist position of Escape menu |
-| CDM Button | `CDMButton.lua` | `cdmButton` | Injects CDM button into Escape menu; `/wa` and `/cm` slashes |
+| CDM Button | `CDMButton.lua` | `cdmButton` | Injects a provider-aware CDM button into the Escape menu, positioned after ElvUI or EllesmereUI custom buttons; `/wa` and `/cm` slashes |
 | CMC Masque | `CMCMasque.lua` | `cmcMasque` | Registers CooldownManagerCentered Essential, Utility, and Buff Icon viewer buttons with Masque when both addons are loaded |
 | Auction Filter | `AuctionFilter.lua` | `auctionFilter` | Pre-enables AH filters on open |
 | Combat Log | `CombatLog.lua` | `combatLog` | Auto-starts/stops combat logging by instance type and level cap |
 | Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Arrow buttons + coordinate display for native Edit Mode frames and LibEditMode-registered custom frames |
-| Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring for configured player-cast buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs. Each buff profile has frame, color, and specialization filters. Built-ins expose only relevant class specs; custom IDs infer spec filters from the player spellbook when possible |
+| Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring for configured player-cast buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs. Each buff profile has frame, color, and specialization filters. EllesmereUI Raid Frames already provides equivalent Health Bar Color indicators in its Buff Manager, so MathWroQOL does not duplicate that runtime |
 | Combat Tracker | `CombatTracker.lua` + 3 section files | `combatTracker` | Cooldown icon display system (racials, trinkets, consumables) |
 
 ---
@@ -176,7 +176,7 @@ Settings panels registered via `Settings.RegisterCanvasLayoutCategory` / `Settin
 - **Parent** — "MathWro QOL" (container, no interactive controls)
   - **General** — GameMenu scaling / drag / reset position; CombatLog instance toggles + level filter
   - **Combat Tracker** — master enable; per-section collapsible blocks (Racials, Trinkets, Consumables)
-  - **ElvUI Plugins** — VehicleBar per-bar visibility toggles
+  - **UI Integrations** — VehicleBar per-bar visibility toggles for ElvUI or EllesmereUI Action Bars; ElvUI Buff Health Color controls and EllesmereUI built-in guidance
   - **CDM Plugins** — CooldownManagerCentered compatibility options such as Masque skinning
   - **Edit Mode** — EditModeNudge enable toggle
   - **Debug** — troubleshooting actions such as Buff Health Color unit diagnostics
@@ -305,11 +305,15 @@ General event rules:
 
 ---
 
-## ElvUI Integration
+## ElvUI and EllesmereUI Integration
 
-- ElvUI-dependent files must begin with `if not ElvUI then return end`
-- Access ElvUI via `local E = ElvUI[1]`; modules via `E:GetModule("ModuleName", true)`
-- Config.lua builds the ElvUI panel even when ElvUI is absent — it disables/greys controls rather than hiding them
+- Provider-dependent files must return early only when none of their supported providers is loaded.
+- Access ElvUI via `local E = ElvUI[1]`; modules via `E:GetModule("ModuleName", true)`.
+- Access EllesmereUI modules through `EllesmereUI.Lite.GetAddon("<folder>", true)`. EllesmereUI action bar frames are named `EABBar_MainBar` and `EABBar_Bar2` through `EABBar_Bar10`.
+- ElvUI visibility uses `RegisterStateDriver(frame, "visibility", condition)`. EllesmereUI Action Bars uses `RegisterAttributeDriver(frame, "state-visibility", condition)`. Compatibility hooks need an `applying` guard for both APIs.
+- Config.lua always builds the UI Integrations panel. Provider-specific controls are disabled and greyed when their provider is absent.
+- Do not duplicate EllesmereUI Raid Frames' Buff Manager. Its `Health Bar Color` indicator already covers player-cast healer buffs with per-spell ownership and color settings.
+- Skin MathWroQOL-owned widgets through EllesmereUI's public `RegisterSkin("MathWroQOL", callback)` API. Do not copy EllesmereUI textures or private skin helpers.
 
 ---
 
@@ -376,6 +380,8 @@ end
 - **`AUCTION_HOUSE_DEFAULT_FILTERS`**: Only exists after `Blizzard_AuctionHouseUI` loads (LoD addon). Correct event is `AUCTION_HOUSE_SHOW` (not `AUCTION_HOUSE_OPENED` — that event does not exist).
 - **`RegisterStateDriver`**: Last call wins. Hooks that call `RegisterStateDriver` must use an `applying` guard to prevent recursion.
 - **ElvUI fade systems**: Two parallel systems exist — individual mouseover fading (`bar.mouseover = true`, fades via `E:UIFrameFadeOut` on `Bar_OnLeave`) and global fade parent (`bar.inheritGlobalFade = true`, parented to `AB.fadeParent`, respects `mouseLock`). ElvUI sets `mouseLock = true` for vehicle/override/combat states. Vehicle visibility logic must handle both.
+- **EllesmereUI action bar visibility**: Secondary bars use `RegisterAttributeDriver(frame, "state-visibility", ...)` with `[vehicleui]` and `[overridebar]` hide clauses. Reapplying an externally adjusted driver requires clearing the frame's `_eabLastVisStr` cache before calling the module visibility refresh methods.
+- **EllesmereUI mouseover bars**: Mouseover mode fades bar alpha to zero independently of the secure visibility driver. Vehicle integration must preserve the configured `_savedBarAlpha` while vehicle abilities are active and honor `UNIT_EXITING_VEHICLE` / `UNIT_EXITED_VEHICLE` even while vehicle APIs still report the stale prior state.
 - **`AB:PLAYER_ENTERING_WORLD`**: Does NOT call `UpdateButtonSettings` — state drivers are only re-registered during `AB:Initialize()` and explicit `Apply()` calls.
 - **Vehicle-like state detection**: `HasOverrideActionBar() or HasVehicleActionBar() or IsPossessBarVisible() or UnitExists("vehicle")`. Override-bar shapeshifts trigger `HasOverrideActionBar()` but NOT `UNIT_ENTERED_VEHICLE`.
 - **Inventory API availability**: `GetInventoryItemID()` and related calls are not reliable at `PLAYER_LOGIN`. Use `PLAYER_ENTERING_WORLD` instead (see `CombatTracker_Trinkets.lua`).

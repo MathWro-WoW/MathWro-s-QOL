@@ -1,8 +1,38 @@
 local _, addon = ...
-if not ElvUI then return end  -- skip all feature code if ElvUI is not loaded
+if not ElvUI and not EllesmereUI then return end
 
 local VehicleBar = { name = "vehicleBar" }
 addon:RegisterFeature(VehicleBar)
+
+local ELLESMERE_BAR_KEYS = {
+    [1] = "MainBar",
+    [2] = "Bar2",
+    [3] = "Bar3",
+    [4] = "Bar4",
+    [5] = "Bar5",
+    [6] = "Bar6",
+    [7] = "Bar7",
+    [8] = "Bar8",
+    [9] = "Bar9",
+    [10] = "Bar10",
+}
+
+local function getEllesmereActionBars()
+    if not EllesmereUI or not EllesmereUI.Lite or not EllesmereUI.Lite.GetAddon then return nil end
+    return EllesmereUI.Lite.GetAddon("EllesmereUIActionBars", true)
+end
+
+local function getEllesmereBar(index)
+    local key = ELLESMERE_BAR_KEYS[index]
+    return key and _G["EABBar_" .. key] or nil
+end
+
+local function getEllesmereBarSettings(index)
+    local EAB = getEllesmereActionBars()
+    local profile = EAB and EAB.db and EAB.db.profile
+    local key = ELLESMERE_BAR_KEYS[index]
+    return profile and profile.bars and key and profile.bars[key] or nil
+end
 
 -- Remove vehicle-related hide tokens from a visibility condition string.
 -- ElvUI default: "[vehicleui][petbattle][overridebar] hide; show"
@@ -50,6 +80,38 @@ local function isVehicleLikeWithAbilities()
     return false
 end
 
+local hookedEllesmereAlpha = setmetatable({}, { __mode = "k" })
+
+local function shouldForceEllesmereAlpha(index)
+    local db = addon.db and addon.db.vehicleBar
+    if not db or not db.enabled or not db.bars[index] or suppressVehicleShow then return false end
+
+    local settings = getEllesmereBarSettings(index)
+    return settings and settings.mouseoverEnabled and isVehicleLikeWithAbilities()
+end
+
+local function getEllesmereBarAlpha(index)
+    local settings = getEllesmereBarSettings(index)
+    return settings and (settings._savedBarAlpha or 1) or 1
+end
+
+local function hookEllesmereBarAlpha(index)
+    local bar = getEllesmereBar(index)
+    if not bar or hookedEllesmereAlpha[bar] then return end
+
+    hookedEllesmereAlpha[bar] = true
+    hooksecurefunc(bar, "SetAlpha", function(self, alpha)
+        if self._mqolVehicleAlphaApplying or not shouldForceEllesmereAlpha(index) then return end
+
+        local targetAlpha = getEllesmereBarAlpha(index)
+        if alpha >= targetAlpha then return end
+
+        self._mqolVehicleAlphaApplying = true
+        self:SetAlpha(targetAlpha)
+        self._mqolVehicleAlphaApplying = nil
+    end)
+end
+
 local function onStateDriverRegistered(frame, attribute, condition)
     if applying or attribute ~= "visibility" then return end
     local db = addon.db
@@ -68,35 +130,69 @@ local function onStateDriverRegistered(frame, attribute, condition)
     end
 end
 
+local function onAttributeDriverRegistered(frame, attribute, condition)
+    if applying or attribute ~= "state-visibility" then return end
+    local db = addon.db
+    if not db or not db.vehicleBar.enabled then return end
+
+    for i, enabled in pairs(db.vehicleBar.bars) do
+        if enabled and frame == getEllesmereBar(i) then
+            local newCondition = stripVehicleHide(condition)
+            if newCondition ~= condition then
+                applying = true
+                RegisterAttributeDriver(frame, attribute, newCondition)
+                applying = false
+            end
+            break
+        end
+    end
+end
+
 -- Force all enabled mouseover bars fully visible. Called on vehicle-like entry.
 local function forceShowEnabledBars()
-    local E = ElvUI[1]
-    if not E then return end
     local db = addon.db.vehicleBar
     if not db or not db.enabled then return end
+
+    local E = ElvUI and ElvUI[1]
     for i, enabled in pairs(db.bars) do
         if enabled then
-            local bar = _G["ElvUI_Bar"..i]
-            if bar and bar.mouseover then
-                E:UIFrameFadeIn(bar, 0.2, bar:GetAlpha(), (bar.db and bar.db.alpha) or 1)
+            if E then
+                local elvBar = _G["ElvUI_Bar" .. i]
+                if elvBar and elvBar.mouseover then
+                    E:UIFrameFadeIn(elvBar, 0.2, elvBar:GetAlpha(), (elvBar.db and elvBar.db.alpha) or 1)
+                end
+            end
+
+            local ellesmereBar = getEllesmereBar(i)
+            local ellesmereSettings = getEllesmereBarSettings(i)
+            if ellesmereBar and ellesmereSettings and ellesmereSettings.mouseoverEnabled then
+                hookEllesmereBarAlpha(i)
+                ellesmereBar:SetAlpha(getEllesmereBarAlpha(i))
             end
         end
     end
 end
 
--- Fade out enabled mouseover bars back to hidden. Called on vehicle-like exit.
+-- Restore enabled mouseover bars to their configured hidden state.
 local function forceHideEnabledBars()
-    local E = ElvUI[1]
-    if not E then return end
     local db = addon.db.vehicleBar
     if not db or not db.enabled then return end
-    for i, enabled in pairs(db.bars) do
-        if enabled then
-            local bar = _G["ElvUI_Bar"..i]
-            if bar and bar.mouseover then
-                E:UIFrameFadeOut(bar, 0.2, bar:GetAlpha(), 0)
+
+    local E = ElvUI and ElvUI[1]
+    if E then
+        for i, enabled in pairs(db.bars) do
+            if enabled then
+                local bar = _G["ElvUI_Bar" .. i]
+                if bar and bar.mouseover then
+                    E:UIFrameFadeOut(bar, 0.2, bar:GetAlpha(), 0)
+                end
             end
         end
+    end
+
+    local EAB = getEllesmereActionBars()
+    if EAB and EAB.RefreshMouseover then
+        EAB:RefreshMouseover()
     end
 end
 
@@ -187,25 +283,33 @@ end
 
 local function printBarSummary(index)
     local bar = _G["ElvUI_Bar" .. index]
+    local provider = "ElvUI"
+    local db = bar and bar.db
+    if not bar then
+        bar = getEllesmereBar(index)
+        provider = "EllesmereUI"
+        db = getEllesmereBarSettings(index)
+    end
     if not bar then
         debugPrint("bar" .. index .. ": frame missing")
         return
     end
 
-    local db = bar.db
     debugPrint("bar" .. index
+        .. " provider=" .. provider
         .. " shown=" .. boolText(bar:IsShown())
         .. " visible=" .. boolText(bar:IsVisible())
         .. " alpha=" .. valueText(bar:GetAlpha())
-        .. " mouseover=" .. boolText(bar.mouseover)
+        .. " mouseover=" .. boolText(bar.mouseover or (db and db.mouseoverEnabled))
         .. " parent=" .. frameName(bar:GetParent())
         .. " pageAttr=" .. valueText(bar:GetAttribute("page"))
         .. " dbEnabled=" .. boolText(db and db.enabled)
-        .. " dbAlpha=" .. valueText(db and db.alpha)
+        .. " dbAlpha=" .. valueText(db and (db.alpha or db._savedBarAlpha or db.mouseoverAlpha))
         .. " inheritGlobalFade=" .. boolText(db and db.inheritGlobalFade))
 
-    if db and db.visibility then
-        debugPrint("bar" .. index .. " visibility=" .. db.visibility)
+    local visibility = db and (db.visibility or db.barVisibility)
+    if visibility then
+        debugPrint("bar" .. index .. " visibility=" .. visibility)
     end
 end
 
@@ -279,10 +383,15 @@ function VehicleBar:Initialize()
         addon.DebugVehicleBar(message)
     end
 
-    -- Hook RegisterStateDriver to strip vehicle hide conditions from visibility drivers.
+    -- Hook both visibility-driver APIs. ElvUI uses RegisterStateDriver with
+    -- "visibility"; EllesmereUI uses RegisterAttributeDriver with
+    -- "state-visibility".
     hooksecurefunc("RegisterStateDriver", onStateDriverRegistered)
+    if RegisterAttributeDriver then
+        hooksecurefunc("RegisterAttributeDriver", onAttributeDriverRegistered)
+    end
 
-    local E = ElvUI[1]
+    local E = ElvUI and ElvUI[1]
 
     -- Bars using ElvUI's individual mouseover fade are NOT covered by ElvUI's own
     -- vehicle mouseLock (which only protects the global fade parent). Hook
@@ -293,7 +402,7 @@ function VehicleBar:Initialize()
             local db = addon.db.vehicleBar
             if not db or not db.enabled then return end
             for i, enabled in pairs(db.bars) do
-                if enabled and frame == _G["ElvUI_Bar"..i] and frame.mouseover then
+                if enabled and frame == _G["ElvUI_Bar" .. i] and frame.mouseover then
                     -- Overwrite the fade-out with a fade-in before the FadeManager
                     -- processes its first OnUpdate tick — effectively a no-op fade.
                     E:UIFrameFadeIn(frame, 0.1, frame:GetAlpha(), (frame.db and frame.db.alpha) or 1)
@@ -302,7 +411,6 @@ function VehicleBar:Initialize()
             end
         end)
     end
-
     -- Force bars visible on vehicle-like entry; fade them back out on exit.
     -- UNIT_EXITING/EXITED are authoritative exit signals; some vehicle APIs can
     -- still report the old action bar briefly, so suppress re-show until a new
@@ -327,13 +435,32 @@ function VehicleBar:Initialize()
     self:Apply()
 end
 
--- Called when settings change. Triggers ElvUI to re-run PositionAndSizeBar on all
--- bars, which re-registers state drivers, causing our hook to fire again.
+-- Called when settings change. Re-register each provider's visibility drivers,
+-- which causes the provider-specific hooks above to remove or restore vehicle
+-- hide conditions.
 function VehicleBar:Apply()
-    if not ElvUI then return end
-    local E = unpack(ElvUI)
+    local E = ElvUI and ElvUI[1]
     local AB = E and E:GetModule("ActionBars", true)
     if AB and AB.UpdateButtonSettings then
         AB:UpdateButtonSettings()
     end
+
+    local EAB = getEllesmereActionBars()
+    if EAB then
+        local db = addon.db and addon.db.vehicleBar
+        for i = 1, 10 do
+            local bar = getEllesmereBar(i)
+            if bar then
+                if db and db.enabled and db.bars[i] then
+                    hookEllesmereBarAlpha(i)
+                end
+                bar._eabLastVisStr = nil
+            end
+        end
+        if EAB.ApplyCombatVisibility then EAB:ApplyCombatVisibility() end
+        if EAB.RefreshRuntimeVisibility then EAB:RefreshRuntimeVisibility() end
+        if EAB.RefreshMouseover then EAB:RefreshMouseover() end
+    end
+
+    updateEnabledBarsForVehicleState()
 end
