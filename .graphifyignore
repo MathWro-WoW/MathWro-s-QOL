@@ -1,0 +1,19 @@
+# Graphify output and version-control metadata
+graphify-out/
+.git/
+
+# Repository automation and agent instructions
+.github/
+AGENTS.md
+CLAUDE.md
+
+# Vendored libraries
+Libs/
+
+# Local editor, planning, and reference artifacts
+.vscode/
+.superpowers/
+docs/superpowers/
+pictures/
+main.log
+notes*.txt

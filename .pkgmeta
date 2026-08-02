@@ -3,6 +3,9 @@ curse-id: 1482222
 
 ignore:
   - .pkgmeta
+  - .gitignore
+  - .graphifyignore
+  - graphify-out
   - .github
   - AGENTS.md
   - CLAUDE.md

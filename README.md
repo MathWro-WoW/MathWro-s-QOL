@@ -13,7 +13,7 @@ Scale the Escape menu up or down. Range: 0.5× – 2.0×. Persists across sessio
 Make the Escape menu freely draggable. Position is saved and restored on each login. Includes a Reset Position button to snap it back to centre.
 
 **CDM Button**
-Adds a "CDM" button to the Escape menu that directly opens the Cooldown Manager window (`CooldownViewerSettings`). Positioned between Shop and AddOns, and grouped below the ElvUI button when ElvUI is active. Also registers `/wa` and `/cm` chat commands as shortcuts. All three (button, `/wa`, `/cm`) can be toggled independently in the options panel.
+Adds a "CDM" button to the Escape menu that directly opens the Cooldown Manager window (`CooldownViewerSettings`). Positioned between Shop and AddOns by default, grouped below the ElvUI button when ElvUI is active, or after the visible EllesmereUI and Unlock Mode buttons when EllesmereUI is active. EllesmereUI styling follows its third-party skin settings. Also registers `/wa` and `/cm` chat commands as shortcuts. All three (button, `/wa`, `/cm`) can be toggled independently in the options panel.
 
 **Auction House Filters**
 Automatically pre-enables selected filters each time you open the Auction House. Two independent toggles in the options panel: "Current expansion only" and "Usable only". Filters are re-applied on every AH open so any in-session manual changes are reset.
@@ -39,13 +39,16 @@ Per-section icon width and height sliders. Stack counter and cooldown countdown 
 **Edit Mode Nudge**
 Adds arrow buttons and a coordinate readout when an Edit Mode frame is selected. Nudge frames by 1px per click, or 10px with Shift held. Coordinates display the frame's position relative to screen centre.
 
-### ElvUI Plugins *(requires ElvUI)*
+### UI Integrations
 
-**Vehicle Bar Visibility**
-Keep selected action bars (1–10) visible during vehicle combat and override bar states (e.g. shapeshift-style encounters). Prevents ElvUI's mouseover fade from hiding bars for the duration of the encounter, and restores normal fade behaviour on exit. By default only bar 1 is enabled — enable additional bars in the options panel.
+**Vehicle Bar Visibility** *(requires ElvUI or EllesmereUI Action Bars)*
+Keep selected action bars (1–10) visible during vehicle combat and override bar states (e.g. shapeshift-style encounters). Handles each provider's secure visibility drivers and prevents its mouseover fade from hiding selected bars while usable vehicle abilities are active. Normal visibility and fade behaviour are restored on exit. By default only bar 1 is enabled — enable additional bars under **UI Integrations** in the options panel.
 
-**Buff Health Color**
+**Buff Health Color — ElvUI** *(requires ElvUI)*
 Recolor selected ElvUI unit frame health bars while units have configured player-cast buffs. Includes per-buff settings for Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, plus custom spell IDs that add more buff profiles alongside the built-ins. Each buff can be enabled, colored, assigned to player, target, party, or ElvUI raid frame sizes, and restricted to relevant player specializations independently. Built-ins only expose specs from the class that can use the spell; single-spec spells such as Beacon of the Savior load in that spec automatically, while Prayer of Mending can be configured for Discipline and/or Holy Priest. Custom spell IDs are added from the buff profile dropdown via "Add custom ID..." and infer relevant specs from the player spellbook when possible, falling back to all-spec manual configuration when the spell is not discoverable.
+
+**Buff Health Color — EllesmereUI**
+EllesmereUI Raid Frames already provides this functionality natively. In its Buff Manager, create an indicator and select **Health Bar Color** to configure spell assignment, ownership, color, and opacity. MathWroQOL deliberately does not install a second competing recolor runtime.
 
 ### CDM Plugins *(requires CooldownManagerCentered and Masque)*
 
