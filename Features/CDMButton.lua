@@ -6,10 +6,12 @@ addon:RegisterFeature(CDMButton)
 -- The button widget, created once and reused.
 local btn
 local ellesmereStyled = false
+local exactEllesmereStyle = false
 local nativeArt = {}
 local positionPending = false
 local ellesmereInset
 local ellesmereBackground
+local ellesmereHighlight
 
 local function openCDM()
     if CooldownViewerSettings then
@@ -40,6 +42,15 @@ local function suppressNativeButtonArt()
         "GetHighlightTexture",
     }) do
         keepNativeTextureHidden(btn[getter] and btn[getter](btn))
+    end
+
+    if exactEllesmereStyle then
+        for index = 1, select("#", btn:GetRegions()) do
+            local region = select(index, btn:GetRegions())
+            if region ~= ellesmereHighlight and region:IsObjectType("Texture") then
+                keepNativeTextureHidden(region)
+            end
+        end
     end
 end
 
@@ -72,6 +83,7 @@ local function applyExactEllesmereStyle()
     end
 
     ellesmereStyled = true
+    exactEllesmereStyle = true
     suppressNativeButtonArt()
 
     ellesmereInset = CreateFrame("Frame", nil, btn)
@@ -86,9 +98,9 @@ local function applyExactEllesmereStyle()
     )
     ellesmereBackground:SetAllPoints()
 
-    local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints(ellesmereInset)
-    highlight:SetColorTexture(1, 1, 1, 0.1)
+    ellesmereHighlight = btn:CreateTexture(nil, "HIGHLIGHT")
+    ellesmereHighlight:SetAllPoints(ellesmereInset)
+    ellesmereHighlight:SetColorTexture(1, 1, 1, 0.1)
     refreshExactEllesmereStyle()
     return true
 end
