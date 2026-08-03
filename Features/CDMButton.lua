@@ -5,27 +5,57 @@ addon:RegisterFeature(CDMButton)
 
 -- The button widget, created once and reused.
 local btn
+local ellesmereSkin
+local nativeArt = {}
+local positionPending = false
 
 local function openCDM()
     if CooldownViewerSettings then
         CooldownViewerSettings:Show()
     end
 end
+local function keepNativeTextureHidden(texture)
+    if not texture or nativeArt[texture] then return end
+    nativeArt[texture] = true
+    texture:SetAlpha(0)
+    hooksecurefunc(texture, "SetAlpha", function(self, alpha)
+        if alpha and alpha > 0 then
+            self:SetAlpha(0)
+        end
+    end)
+end
 
--- Called via hooksecurefunc on GameMenuFrame.Layout.
--- Blizzard re-pools and re-positions all buttons in Layout(), so this hook
--- runs after the layout is fully settled — the correct place to insert extras.
+local function suppressNativeButtonArt()
+    if not ellesmereSkin or not btn then return end
+
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do
+        keepNativeTextureHidden(btn[key])
+    end
+    for _, getter in ipairs({
+        "GetNormalTexture",
+        "GetPushedTexture",
+        "GetDisabledTexture",
+        "GetHighlightTexture",
+    }) do
+        keepNativeTextureHidden(btn[getter] and btn[getter](btn))
+    end
+end
+
+-- Queued from GameMenuFrame.Layout so every provider's own layout hook finishes
+-- before MathWroQOL inserts its button.
 local function positionCDMButton()
     if not btn or not btn:IsShown() then return end
 
-    local anchorBtn
+    local anchorBtn, ellesmereAnchor
     if GameMenuFrame.ElvUI then
         -- ElvUI is loaded: group CDM directly below the ElvUI button.
         anchorBtn = GameMenuFrame.ElvUI
     elseif _G.EllesmereUI_UnlockMenuButton and _G.EllesmereUI_UnlockMenuButton:IsShown() then
         anchorBtn = _G.EllesmereUI_UnlockMenuButton
+        ellesmereAnchor = true
     elseif _G.EllesmereUI_GameMenuButton and _G.EllesmereUI_GameMenuButton:IsShown() then
         anchorBtn = _G.EllesmereUI_GameMenuButton
+        ellesmereAnchor = true
     elseif GameMenuFrame.buttonPool then
         -- No suite-specific button: find Shop in the active Blizzard pool.
         local storeText = _G.BLIZZARD_STORE
@@ -41,8 +71,16 @@ local function positionCDMButton()
 
     if not anchorBtn then return end
 
+    local anchorWidth, anchorHeight = anchorBtn:GetSize()
+    if anchorWidth and anchorWidth > 0 then
+        btn:SetSize(anchorWidth, anchorHeight or 35)
+    end
+
+    local extraHeight = ellesmereAnchor and 40 or 45
+    local gap = ellesmereAnchor and 4 or 10
     btn:ClearAllPoints()
-    btn:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -10)
+    btn:SetPoint("TOP", anchorBtn, "BOTTOM", 0, -gap)
+    suppressNativeButtonArt()
 
     -- Nudge all pool buttons that sit at or below the anchor's bottom edge down
     -- to make room for CDM. Layout() resets their positions each open, so this
@@ -55,14 +93,23 @@ local function positionCDMButton()
                 local point, relativeTo, relativePoint, x, y = button:GetPoint()
                 if point then
                     button:ClearAllPoints()
-                    button:SetPoint(point, relativeTo, relativePoint, x, y - 45)
+                    button:SetPoint(point, relativeTo, relativePoint, x or 0, (y or 0) - extraHeight)
                 end
             end
         end
     end
 
     -- Expand the frame to fit the extra button and its gap.
-    GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + 45)
+    GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + extraHeight)
+end
+
+local function queuePositionCDMButton()
+    if positionPending then return end
+    positionPending = true
+    C_Timer.After(0, function()
+        positionPending = false
+        positionCDMButton()
+    end)
 end
 
 function CDMButton:Apply()
@@ -89,7 +136,7 @@ function CDMButton:Initialize()
     -- Hook Layout (not OnShow): Blizzard calls Layout() to position all pooled
     -- buttons, so hooking here ensures our SetPoint runs after theirs.
     if not GameMenuFrame._mqolCDMHooked then
-        hooksecurefunc(GameMenuFrame, "Layout", positionCDMButton)
+        hooksecurefunc(GameMenuFrame, "Layout", queuePositionCDMButton)
         GameMenuFrame._mqolCDMHooked = true
     end
 
@@ -115,8 +162,11 @@ function CDMButton:Initialize()
     -- active provider. The callback also tracks later EllesmereUI theme changes.
     if not ElvUI and EllesmereUI and EllesmereUI.RegisterSkin then
         EllesmereUI.RegisterSkin("MathWroQOL", function(S)
+            ellesmereSkin = S
             S.Button(btn)
+            S.Font(btn:GetFontString())
             S.WhiteButtonLabel(btn)
+            suppressNativeButtonArt()
         end)
     end
 
