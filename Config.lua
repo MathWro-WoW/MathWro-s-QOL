@@ -899,13 +899,15 @@ local function BuildCombatLogPanel()
     return panel
 end
 
-local function BuildElvUIPanel()
+local function BuildUIIntegrationsPanel()
     local panel = CreateFrame("Frame")
-    panel.name = "ElvUI Plugins"
+    panel.name = "UI Integrations"
 
-    local sc = MakePanelScaffold(panel, "ElvUI Plugins", "MathWroQOL_ElvUIScroll")
+    local sc = MakePanelScaffold(panel, "UI Integrations", "MathWroQOL_UIIntegrationsScroll")
     local elvuiLoaded = ElvUI ~= nil
-
+    local ellesmereActionBarsLoaded = IsAddonLoaded("EllesmereUIActionBars")
+    local ellesmereRaidFramesLoaded = IsAddonLoaded("EllesmereUIRaidFrames")
+    local vehicleProviderLoaded = elvuiLoaded or ellesmereActionBarsLoaded
     local rootAnchor = CreateFrame("Frame", nil, sc)
     rootAnchor:SetSize(1, 1)
     rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
@@ -918,11 +920,11 @@ local function BuildElvUIPanel()
     )
 
     local notice
-    if not elvuiLoaded then
+    if not vehicleProviderLoaded then
         notice = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
         notice:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
         notice:SetTextColor(1, 0.3, 0.3)
-        notice:SetText("ElvUI is not loaded. These options are unavailable.")
+        notice:SetText("ElvUI or EllesmereUI Action Bars must be loaded.")
     end
 
     local enabledCB = MakeCheckbox(content, "Enable", 0, 0,
@@ -982,7 +984,7 @@ local function BuildElvUIPanel()
     end
     enabledCB:HookScript("OnClick", updateVehicleGatekeeper)
 
-    if not elvuiLoaded then
+    if not vehicleProviderLoaded then
         enabledCB:Disable()
         enabledCB:SetAlpha(0.4)
         SetChildrenEnabled(barsContainer, false)
@@ -994,8 +996,23 @@ local function BuildElvUIPanel()
         sc,
         card,
         "Buff Health Color",
-        "Recolor selected ElvUI unit frame health bars while units have configured buffs. Add custom spell IDs to create more buff profiles next to Atonement and Lifebloom."
+        "Recolor selected ElvUI unit frame health bars while units have configured buffs. EllesmereUI Raid Frames already provides this through Buff Manager indicators using the Health Bar Color type."
     )
+
+    local buffNotice
+    if not elvuiLoaded then
+        buffNotice = buffContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        buffNotice:SetPoint("TOPLEFT", buffContent, "TOPLEFT", 12, -2)
+        buffNotice:SetWidth(430)
+        buffNotice:SetJustifyH("LEFT")
+        if ellesmereRaidFramesLoaded then
+            buffNotice:SetTextColor(1, 0.82, 0.2)
+            buffNotice:SetText("Already built into EllesmereUI Raid Frames: create a Buff Manager indicator and choose Health Bar Color.")
+        else
+            buffNotice:SetTextColor(1, 0.3, 0.3)
+            buffNotice:SetText("ElvUI is not loaded. These options are unavailable.")
+        end
+    end
 
     local buffEnableCB = MakeCheckbox(buffContent, "Enable", 0, 0,
         function()
@@ -1009,7 +1026,11 @@ local function BuildElvUIPanel()
         end
     )
     buffEnableCB:ClearAllPoints()
-    buffEnableCB:SetPoint("TOPLEFT", buffContent, "TOPLEFT", 12, -2)
+    if buffNotice then
+        buffEnableCB:SetPoint("TOPLEFT", buffNotice, "BOTTOMLEFT", -4, -8)
+    else
+        buffEnableCB:SetPoint("TOPLEFT", buffContent, "TOPLEFT", 12, -2)
+    end
 
     local buffOptions = CreateFrame("Frame", nil, buffContent)
     buffOptions:SetPoint("TOPLEFT", buffEnableCB, "BOTTOMLEFT", 20, -8)
@@ -1665,8 +1686,10 @@ local function BuildElvUIPanel()
     buffCard:SetBottomWidget(customActionRow, 16)
 
     panel:HookScript("OnShow", function()
-        if elvuiLoaded then
+        if vehicleProviderLoaded then
             updateVehicleGatekeeper()
+        end
+        if elvuiLoaded then
             updateBuffGatekeeper()
         end
     end)
@@ -2918,7 +2941,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
     local generalPanel = BuildGeneralPanel()
     local combatLogPanel = BuildCombatLogPanel()
     local combatTrackerPanel = BuildCombatTrackerPanel()
-    local elvuiPanel = BuildElvUIPanel()
+    local uiIntegrationsPanel = BuildUIIntegrationsPanel()
     local cdmPluginsPanel = BuildCDMPluginsPanel()
     local editModePanel = BuildEditModePanel()
     local debugPanel = BuildDebugPanel()
@@ -2928,7 +2951,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         local generalCat = Settings.RegisterCanvasLayoutSubcategory(parentCat, generalPanel, generalPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatLogPanel, combatLogPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatTrackerPanel, combatTrackerPanel.name)
-        Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel, elvuiPanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, uiIntegrationsPanel, uiIntegrationsPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, cdmPluginsPanel, cdmPluginsPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, editModePanel, editModePanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, debugPanel, debugPanel.name)
@@ -2943,7 +2966,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         InterfaceOptions_AddCategory(generalPanel, parentPanel)
         InterfaceOptions_AddCategory(combatLogPanel, parentPanel)
         InterfaceOptions_AddCategory(combatTrackerPanel, parentPanel)
-        InterfaceOptions_AddCategory(elvuiPanel, parentPanel)
+        InterfaceOptions_AddCategory(uiIntegrationsPanel, parentPanel)
         InterfaceOptions_AddCategory(cdmPluginsPanel, parentPanel)
         InterfaceOptions_AddCategory(editModePanel, parentPanel)
         InterfaceOptions_AddCategory(debugPanel, parentPanel)
