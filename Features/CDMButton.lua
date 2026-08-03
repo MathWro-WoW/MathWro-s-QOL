@@ -43,72 +43,132 @@ end
 
 -- Queued from GameMenuFrame.Layout so every provider's own layout hook finishes
 -- before MathWroQOL inserts its button.
+local function findMenuAnchors()
+    if not GameMenuFrame.buttonPool then return nil, nil, {} end
+
+    local pooled = {}
+    local storeButton, optionsButton, addonsButton
+    for button in GameMenuFrame.buttonPool:EnumerateActive() do
+        pooled[button] = true
+        local text = button:GetText()
+        if text == _G.BLIZZARD_STORE then
+            storeButton = button
+        elseif text == _G.GAMEMENU_OPTIONS then
+            optionsButton = button
+        elseif text == _G.ADDONS then
+            addonsButton = button
+        end
+    end
+
+    local baseButton = storeButton or optionsButton
+    if not baseButton then return nil, addonsButton, pooled end
+    if addonsButton then return baseButton, addonsButton, pooled end
+
+    -- Fallback for clients without an AddOns entry: use the nearest pooled
+    -- button below the insertion anchor as the lower layout boundary.
+    local baseBottom = baseButton:GetBottom()
+    local boundaryTop
+    if baseBottom then
+        for button in pairs(pooled) do
+            local top = button:GetTop()
+            if top and top < baseBottom + 2 and (not boundaryTop or top > boundaryTop) then
+                addonsButton = button
+                boundaryTop = top
+            end
+        end
+    end
+    return baseButton, addonsButton, pooled
+end
+
+local function findLowestCustomButton(baseButton, boundaryButton, pooled)
+    local baseBottom = baseButton:GetBottom()
+    local baseWidth = baseButton:GetWidth()
+    if not baseBottom or not baseWidth or baseWidth <= 0 then return baseButton end
+
+    local boundaryTop = boundaryButton and boundaryButton:GetTop()
+    local baseCenter = baseButton:GetCenter()
+    local anchorButton = baseButton
+    local anchorBottom = baseBottom
+    for _, child in ipairs({ GameMenuFrame:GetChildren() }) do
+        if child ~= btn and not pooled[child] and child:IsShown()
+            and child.IsObjectType and child:IsObjectType("Button")
+        then
+            local top = child:GetTop()
+            local bottom = child:GetBottom()
+            local width = child:GetWidth()
+            local height = child:GetHeight()
+            local center = child:GetCenter()
+            local aligned = not baseCenter or not center
+                or math.abs(center - baseCenter) <= baseWidth * 0.35
+            if top and bottom and width and height and height > 10
+                and width >= baseWidth * 0.6 and aligned
+                and top <= baseBottom + 2
+                and (not boundaryTop or top > boundaryTop)
+                and bottom < anchorBottom
+            then
+                anchorButton = child
+                anchorBottom = bottom
+            end
+        end
+    end
+    return anchorButton
+end
+
 local function positionCDMButton()
     if not btn or not btn:IsShown() then return end
 
-    local anchorBtn, ellesmereAnchor
-    if GameMenuFrame.ElvUI then
-        -- ElvUI is loaded: group CDM directly below the ElvUI button.
-        anchorBtn = GameMenuFrame.ElvUI
-    elseif _G.EllesmereUI_UnlockMenuButton and _G.EllesmereUI_UnlockMenuButton:IsShown() then
-        anchorBtn = _G.EllesmereUI_UnlockMenuButton
-        ellesmereAnchor = true
-    elseif _G.EllesmereUI_GameMenuButton and _G.EllesmereUI_GameMenuButton:IsShown() then
-        anchorBtn = _G.EllesmereUI_GameMenuButton
-        ellesmereAnchor = true
-    elseif GameMenuFrame.buttonPool then
-        -- No suite-specific button: find Shop in the active Blizzard pool.
-        local storeText = _G.BLIZZARD_STORE
-        if storeText then
-            for button in GameMenuFrame.buttonPool:EnumerateActive() do
-                if button:GetText() == storeText then
-                    anchorBtn = button
-                    break
-                end
-            end
-        end
+    local baseButton, boundaryButton, pooled = findMenuAnchors()
+    if not baseButton then return end
+
+    -- Discover custom buttons by geometry rather than addon-specific names.
+    -- The lowest visible menu-sized button between Shop/Options and AddOns is
+    -- the end of the current custom-button chain.
+    local anchorButton = findLowestCustomButton(baseButton, boundaryButton, pooled)
+    local anchorIsCustom = anchorButton ~= baseButton
+    local gap = anchorIsCustom and 4 or 10
+
+    local width, height = baseButton:GetSize()
+    if width and width > 0 then
+        btn:SetSize(width, height or 35)
     end
-
-    if not anchorBtn then return end
-
-    local anchorWidth, anchorHeight = anchorBtn:GetSize()
-    if anchorWidth and anchorWidth > 0 then
-        btn:SetSize(anchorWidth, anchorHeight or 35)
-    end
-
-    local extraHeight = ellesmereAnchor and 40 or 45
-    local gap = ellesmereAnchor and 4 or 10
     btn:ClearAllPoints()
-    btn:SetPoint("TOP", anchorBtn, "BOTTOM", 0, -gap)
+    btn:SetPoint("TOP", anchorButton, "BOTTOM", 0, -gap)
     suppressNativeButtonArt()
 
-    -- Nudge all pool buttons that sit at or below the anchor's bottom edge down
-    -- to make room for CDM. Layout() resets their positions each open, so this
-    -- runs fresh every time and doesn't accumulate.
-    local anchorBottom = anchorBtn:GetBottom()
-    if anchorBottom and GameMenuFrame.buttonPool then
-        for button in GameMenuFrame.buttonPool:EnumerateActive() do
+    -- Move only the pooled section at and below AddOns, and only as far as
+    -- necessary to maintain the same gap below CDM. Existing custom-button
+    -- spacing remains untouched.
+    local shift = 0
+    local boundaryTop = boundaryButton and boundaryButton:GetTop()
+    local buttonBottom = btn:GetBottom()
+    if boundaryTop and buttonBottom then
+        shift = math.max(0, math.ceil(boundaryTop - (buttonBottom - gap)))
+    end
+    if shift > 0 then
+        for button in pairs(pooled) do
             local top = button:GetTop()
-            if top and top <= anchorBottom + 1 then
+            if top and top <= boundaryTop + 1 then
                 local point, relativeTo, relativePoint, x, y = button:GetPoint()
                 if point then
                     button:ClearAllPoints()
-                    button:SetPoint(point, relativeTo, relativePoint, x or 0, (y or 0) - extraHeight)
+                    button:SetPoint(point, relativeTo, relativePoint, x or 0, (y or 0) - shift)
                 end
             end
         end
+        GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + shift)
     end
-
-    -- Expand the frame to fit the extra button and its gap.
-    GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + extraHeight)
 end
 
 local function queuePositionCDMButton()
     if positionPending then return end
     positionPending = true
+    -- A second zero-delay pass runs after extensions that perform their own
+    -- one-frame-deferred menu positioning.
     C_Timer.After(0, function()
-        positionPending = false
-        positionCDMButton()
+        C_Timer.After(0, function()
+            positionPending = false
+            positionCDMButton()
+        end)
     end)
 end
 
@@ -140,8 +200,9 @@ function CDMButton:Initialize()
         GameMenuFrame._mqolCDMHooked = true
     end
 
-    -- Apply ElvUI skin when ElvUI is active, mirroring ElvUI's own GameMenuInitButtons hook.
-    if ElvUI and not GameMenuFrame._mqolCDMSkinHooked then
+    -- Apply suite styling only when exactly one provider is active. If ElvUI
+    -- and EllesmereUI are both present, leave the CDM button native.
+    if ElvUI and not EllesmereUI and not GameMenuFrame._mqolCDMSkinHooked then
         hooksecurefunc(GameMenuFrame, "InitButtons", function()
             if btn and not btn.IsSkinned then
                 local E = ElvUI[1]

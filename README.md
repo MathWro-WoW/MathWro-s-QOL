@@ -13,7 +13,7 @@ Scale the Escape menu up or down. Range: 0.5× – 2.0×. Persists across sessio
 Make the Escape menu freely draggable. Position is saved and restored on each login. Includes a Reset Position button to snap it back to centre.
 
 **CDM Button**
-Adds a "CDM" button to the Escape menu that directly opens the Cooldown Manager window (`CooldownViewerSettings`). Positioned between Shop and AddOns by default, grouped below the ElvUI button when ElvUI is active, or after the visible EllesmereUI and Unlock Mode buttons when EllesmereUI is active. EllesmereUI styling follows its third-party skin settings. Also registers `/wa` and `/cm` chat commands as shortcuts. All three (button, `/wa`, `/cm`) can be toggled independently in the options panel.
+Adds a "CDM" button to the Escape menu that directly opens the Cooldown Manager window (`CooldownViewerSettings`). It discovers the lowest visible custom menu button between Shop/Options and AddOns, then inserts itself without hardcoded addon-button names or unnecessary menu spacing. The button uses ElvUI styling when only ElvUI is active, EllesmereUI's public third-party styling when only EllesmereUI is active, and native Blizzard styling when both or neither suite is active. Also registers `/wa` and `/cm` chat commands as shortcuts. All three (button, `/wa`, `/cm`) can be toggled independently in the options panel.
 
 **Auction House Filters**
 Automatically pre-enables selected filters each time you open the Auction House. Two independent toggles in the options panel: "Current expansion only" and "Usable only". Filters are re-applied on every AH open so any in-session manual changes are reset.

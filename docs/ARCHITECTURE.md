@@ -313,6 +313,8 @@ General event rules:
 - ElvUI visibility uses `RegisterStateDriver(frame, "visibility", condition)`. EllesmereUI Action Bars uses `RegisterAttributeDriver(frame, "state-visibility", condition)`. Compatibility hooks need an `applying` guard for both APIs.
 - Config.lua always builds the UI Integrations panel. Provider-specific controls are disabled and greyed when their provider is absent.
 - Do not duplicate EllesmereUI Raid Frames' Buff Manager. Its `Health Bar Color` indicator already covers player-cast healer buffs with per-spell ownership and color settings.
+- Game-menu integrations must discover visible, menu-sized custom `Button` children between Shop/Options and AddOns after deferred layout settles. Shift only the pooled lower section, and only by the measured collision amount; do not hardcode provider button names or fixed menu growth.
+- CDM Button styling is mutually exclusive: use ElvUI when only ElvUI is active, EllesmereUI's public `RegisterSkin` API when only EllesmereUI is active, and native Blizzard styling when both or neither suite is active.
 - Skin MathWroQOL-owned widgets through EllesmereUI's public `RegisterSkin("MathWroQOL", callback)` API. Do not copy EllesmereUI textures or private skin helpers.
 
 ---
