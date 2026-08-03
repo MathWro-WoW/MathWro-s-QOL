@@ -114,6 +114,25 @@ local function findLowestCustomButton(baseButton, boundaryButton, pooled)
     return anchorButton
 end
 
+local function matchMenuButtonFont(sourceButton)
+    local source = sourceButton and sourceButton:GetFontString()
+    local target = btn and btn:GetFontString()
+    if not source or not target then return end
+
+    local sourcePath, sourceSize, sourceFlags = source:GetFont()
+    local targetPath, _, targetFlags = target:GetFont()
+    if not sourceSize or not targetPath then return end
+
+    -- With one suite active, match its pooled menu-button font completely.
+    -- With both or neither active, preserve the native face and flags while
+    -- still matching the surrounding menu's rendered size.
+    if (ElvUI and not EllesmereUI) or (EllesmereUI and not ElvUI) then
+        target:SetFont(sourcePath or targetPath, sourceSize, sourceFlags or "")
+    else
+        target:SetFont(targetPath, sourceSize, targetFlags or "")
+    end
+end
+
 local function positionCDMButton()
     if not btn or not btn:IsShown() then return end
 
@@ -131,6 +150,7 @@ local function positionCDMButton()
     if width and width > 0 then
         btn:SetSize(width, height or 35)
     end
+    matchMenuButtonFont(boundaryButton or baseButton)
     btn:ClearAllPoints()
     btn:SetPoint("TOP", anchorButton, "BOTTOM", 0, -gap)
     suppressNativeButtonArt()
