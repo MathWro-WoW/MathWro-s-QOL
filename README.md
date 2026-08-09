@@ -37,15 +37,20 @@ Per-section icon width and height sliders. Stack counter and cooldown countdown 
 ### Edit Mode
 
 **Edit Mode Nudge**
-Adds arrow buttons and a coordinate readout when an Edit Mode frame is selected. Nudge frames by 1px per click, or 10px with Shift held. Coordinates display the frame's position relative to screen centre.
+Adds arrow buttons and a coordinate readout when a Blizzard Edit Mode or LibEditMode frame is selected. Nudge frames by 1px per click, or 10px with Shift held. Coordinates display the frame's position relative to screen centre.
 
 ### UI Integrations
 
+Integrations are split into **ElvUI** and **EllesmereUI** submenus. Each provider's controls are disabled when that provider (or its required module) is not loaded.
+
+**Unlock Mode Nudge — EllesmereUI** *(requires EllesmereUI Unlock Mode; disabled by default)*
+Adds the same arrow controls to EllesmereUI Unlock Mode movers and uses EUI's native pixel-grid coordinate readout and movement units.
+
 **Vehicle Bar Visibility** *(requires ElvUI or EllesmereUI Action Bars)*
-Keep selected action bars (1–10) visible during vehicle combat and override bar states (e.g. shapeshift-style encounters). Handles each provider's secure visibility drivers and prevents its mouseover fade from hiding selected bars while usable vehicle abilities are active. Normal visibility and fade behaviour are restored on exit. By default only bar 1 is enabled — enable additional bars under **UI Integrations** in the options panel.
+Keep selected action bars (1–10) visible during vehicle combat and override bar states (e.g. shapeshift-style encounters). Handles each provider's secure visibility drivers and prevents its mouseover fade from hiding selected bars while usable vehicle abilities are active. Normal visibility and fade behaviour are restored on exit. By default only bar 1 is enabled.
 
 **Buff Health Color — ElvUI** *(requires ElvUI)*
-Recolor selected ElvUI unit frame health bars while units have configured player-cast buffs. Includes per-buff settings for Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, plus custom spell IDs that add more buff profiles alongside the built-ins. Each buff can be enabled, colored, assigned to player, target, party, or ElvUI raid frame sizes, and restricted to relevant player specializations independently. Built-ins only expose specs from the class that can use the spell; single-spec spells such as Beacon of the Savior load in that spec automatically, while Prayer of Mending can be configured for Discipline and/or Holy Priest. Custom spell IDs are added from the buff profile dropdown via "Add custom ID..." and infer relevant specs from the player spellbook when possible, falling back to all-spec manual configuration when the spell is not discoverable.
+Recolor selected ElvUI unit frame health bars while units have configured player-cast buffs. Includes per-buff settings for Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, plus custom spell IDs that add more buff profiles alongside the built-ins. Each buff can be enabled, colored, assigned to player, target, party, or ElvUI raid frame sizes, and restricted to relevant player specializations independently.
 
 **Buff Health Color — EllesmereUI**
 EllesmereUI Raid Frames already provides this functionality natively. In its Buff Manager, create an indicator and select **Health Bar Color** to configure spell assignment, ownership, color, and opacity. MathWroQOL deliberately does not install a second competing recolor runtime.

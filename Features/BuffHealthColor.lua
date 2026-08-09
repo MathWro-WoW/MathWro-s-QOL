@@ -526,9 +526,13 @@ end
 
 local function printDebugForUnit(unit)
     local db = ensureDbShape()
-    scanExistingHealthBars()
+    if not db or not db.enabled then
+        debugPrint("feature disabled")
+        return
+    end
 
-    debugPrint("unit=" .. tostring(unit) .. " exists=" .. boolText(UnitExists(unit)) .. " featureEnabled=" .. boolText(db and db.enabled))
+    scanExistingHealthBars()
+    debugPrint("unit=" .. tostring(unit) .. " exists=" .. boolText(UnitExists(unit)) .. " featureEnabled=true")
 
     if UF and UF.db and UF.db.colors then
         local colors = UF.db.colors
@@ -733,6 +737,8 @@ local function registerHooks()
 
     if UF.Configure_HealthBar then
         hooksecurefunc(UF, "Configure_HealthBar", function(_, frame)
+            local db = getDb()
+            if not db or not db.enabled then return end
             if frame and frame.Health then
                 wrapHealthBar(frame.Health)
             end
@@ -743,14 +749,24 @@ local function registerHooks()
 end
 
 function BuffHealthColor:Initialize()
-    ensureDbShape()
+    local db = ensureDbShape()
+    if not db or not db.enabled then return end
     registerHooks()
     scanExistingHealthBars()
     self:Apply()
 end
 
 function BuffHealthColor:Apply()
-    ensureDbShape()
+    local db = ensureDbShape()
+    if not db or not db.enabled then
+        unregisterEvents()
+        clearAuraState()
+        activeProfiles = {}
+        activeProfilesReady = false
+        return
+    end
+
+    registerHooks()
     scanExistingHealthBars()
     registerEvents()
     refreshAll()

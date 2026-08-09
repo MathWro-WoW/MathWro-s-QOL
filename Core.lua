@@ -8,6 +8,10 @@ local defaults = {
         enabled = false,
         bars = { [1] = true },
     },
+    gameMenu = {
+        scale = 1.0,
+        moveable = false,
+    },
     buffHealthColor = {
         enabled = false,
         selectedBuff = "atonement",
@@ -144,6 +148,7 @@ local defaults = {
     },
     editModeNudge = {
         enabled = false,
+        ellesmereEnabled = false,
     },
     combatTracker = {
         enabled = false,

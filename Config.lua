@@ -89,6 +89,18 @@ local function FindScrollChildAndRecalc(startFrame)
         f = f:GetParent()
     end
 end
+local function RefreshSettingsTree(frame)
+    if not frame then return end
+    if frame._mqolRefreshLayout then
+        frame._mqolRefreshLayout()
+    end
+    if frame._mqolRefreshControl and frame.Refresh then
+        frame:Refresh()
+    end
+    for _, child in ipairs({ frame:GetChildren() }) do
+        RefreshSettingsTree(child)
+    end
+end
 
 local function MakePanelScaffold(panel, titleText, scrollName)
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
@@ -130,8 +142,24 @@ local function MakePanelScaffold(panel, titleText, scrollName)
 
     scrollChild.RecalcScrollHeight = RecalcScrollHeight
 
+    local function RefreshPanelLayout()
+        if not panel:IsShown() then return end
+        RefreshSettingsTree(scrollChild)
+        RecalcScrollHeight()
+    end
+
+    local function SchedulePanelLayoutRefresh(delay)
+        C_Timer.After(delay, RefreshPanelLayout)
+    end
+
     panel:HookScript("OnShow", function()
-        C_Timer.After(0, RecalcScrollHeight)
+        SchedulePanelLayoutRefresh(0.05)
+    end)
+
+    scrollFrame:HookScript("OnSizeChanged", function()
+        if panel:IsShown() then
+            SchedulePanelLayoutRefresh(0.05)
+        end
     end)
 
     return scrollChild
@@ -170,11 +198,12 @@ local function MakeCard(parent, anchor, title, description)
             if card:GetTop() and (widget:GetBottom() or 0) then
                 local h = math.max(60, (card:GetTop() - widget:GetBottom()) + bottomPadding)
                 card:SetHeight(h)
+                FindScrollChildAndRecalc(card)
             end
         end
+        card._mqolRefreshLayout = applyHeight
 
         applyHeight()
-        C_Timer.After(0, applyHeight)
     end
 
     return card, content
@@ -193,16 +222,26 @@ local function MakeSeparator(parent, anchor, offsetY)
     return holder
 end
 
+local CHECKBOX_SIZE = 24
+local CHECKBOX_TEXT_GAP = 2
+
 local function MakeCheckbox(parent, label, x, y, getValue, setValue)
     local cb = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
+    local S = ElvSkin()
+    if S then S:HandleCheckBox(cb) end
+    cb:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
     cb:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    cb.Text:ClearAllPoints()
+    cb.Text:SetPoint("LEFT", cb, "RIGHT", CHECKBOX_TEXT_GAP, 0)
     cb.Text:SetText(label)
-    cb:SetChecked(getValue())
+    function cb:Refresh()
+        self:SetChecked(getValue() == true)
+    end
+    cb._mqolRefreshControl = true
+    cb:Refresh()
     cb:SetScript("OnClick", function(self)
         setValue(self:GetChecked() == true)
     end)
-    local S = ElvSkin()
-    if S then S:HandleCheckBox(cb) end
     return cb
 end
 
@@ -263,6 +302,7 @@ local function MakeColorSwatch(parent, label, getColor, setColor)
     end)
 
     swatch:Refresh()
+    swatch._mqolRefreshControl = true
     container.swatch = swatch
     return container
 end
@@ -356,196 +396,94 @@ local function MakeSliderWithInput(parent, label, minVal, maxVal, getVal, setVal
     end
 
     container:Refresh()
+    container._mqolRefreshControl = true
     return container
 end
 
-local _openDropdownPopups = {}
 local _dropdownCount = 0
 local function MakeDropdown(parent, options, getValue, setValue, notifyFeature)
     _dropdownCount = _dropdownCount + 1
     notifyFeature = notifyFeature or "combatTracker"
 
-    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    btn:SetSize(130, 22)
-    ApplyFrameBackdrop(btn, false)
-    btn:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-    if ElvUI then
-        btn:SetBackdropBorderColor(unpack(ElvUI[1].media.bordercolor))
-    end
+    local btn = CreateFrame(
+        "DropdownButton",
+        "MathWroQOL_Dropdown" .. _dropdownCount,
+        parent,
+        "WowStyle1DropdownTemplate"
+    )
+    btn:SetSize(170, 28)
+    btn:SetDefaultText("")
 
-    local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    btnText:SetPoint("LEFT", 6, 0)
-    btnText:SetPoint("RIGHT", -22, 0)
-    btnText:SetJustifyH("LEFT")
-
-    local btnIcon = btn:CreateTexture(nil, "OVERLAY")
-    btnIcon:SetSize(14, 14)
-    btnIcon:SetPoint("LEFT", btn, "LEFT", 5, 0)
-    btnIcon:Hide()
-
-    local arrow = btn:CreateTexture(nil, "OVERLAY")
-    arrow:SetSize(16, 16)
-    arrow:SetPoint("RIGHT", -3, 0)
-    arrow:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
-    arrow:SetTexCoord(0, 1, 0, 0.5)
-    arrow:SetVertexColor(1, 0.82, 0, 1)
-    btn.arrow = arrow
-
-    local popup = CreateFrame("Frame", "MathWroQOL_DropPopup" .. _dropdownCount, UIParent, "BackdropTemplate")
-    table.insert(_openDropdownPopups, popup)
-    popup:SetFrameStrata("TOOLTIP")
-    popup:SetWidth(130)
-    ApplyFrameBackdrop(popup, false)
-    popup:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-    if ElvUI then
-        popup:SetBackdropBorderColor(unpack(ElvUI[1].media.bordercolor))
-    end
-    popup:Hide()
-
-    local ROW_H = 20
-    local rows = {}
-
-    local function clearRows()
-        for _, row in ipairs(rows) do
-            row.frame:Hide()
+    local function formatOptionLabel(option)
+        if option.icon then
+            return string.format("|T%s:14:14|t %s", option.icon, option.label)
         end
-        rows = {}
+        return option.label
     end
 
-    local function updateRowColors()
-        local cur = getValue()
-        for _, r in ipairs(rows) do
-            if r.opt.value == cur then
-                r.frame.label:SetTextColor(1, 0.82, 0, 1)
-            else
-                r.frame.label:SetTextColor(1, 1, 1, 1)
+    local function getSelectedLabel()
+        local current = getValue()
+        for _, option in ipairs(options) do
+            if option.value == current then
+                return formatOptionLabel(option)
             end
         end
+        return options[1] and formatOptionLabel(options[1]) or ""
     end
 
-    local function refresh()
-        local cur = getValue()
-        for _, r in ipairs(rows) do
-            if r.opt.value == cur then
-                btnText:SetText(r.opt.label)
-                if r.opt.icon then
-                    btnIcon:SetTexture(r.opt.icon)
-                    btnIcon:Show()
-                    btnText:ClearAllPoints()
-                    btnText:SetPoint("LEFT", btnIcon, "RIGHT", 5, 0)
-                    btnText:SetPoint("RIGHT", -22, 0)
-                else
-                    btnIcon:Hide()
-                    btnText:ClearAllPoints()
-                    btnText:SetPoint("LEFT", 6, 0)
-                    btnText:SetPoint("RIGHT", -22, 0)
+    local function refreshText()
+        local text = getSelectedLabel()
+        if btn.OverrideText then
+            btn:OverrideText(text)
+        elseif btn.SetText then
+            btn:SetText(text)
+        end
+    end
+
+    btn:SetupMenu(function(owner, rootDescription)
+        for _, option in ipairs(options) do
+            local label = formatOptionLabel(option)
+            if option.action then
+                local item = rootDescription:CreateButton(label, function()
+                    option.action(btn)
+                end)
+                if item and item.SetSelectionIgnored then
+                    item:SetSelectionIgnored()
                 end
-                return
-            end
-        end
-        btnIcon:Hide()
-        btnText:ClearAllPoints()
-        btnText:SetPoint("LEFT", 6, 0)
-        btnText:SetPoint("RIGHT", -22, 0)
-        if options[1] then btnText:SetText(options[1].label) end
-    end
-
-    local function rebuildRows(newOptions)
-        if newOptions then options = newOptions end
-        clearRows()
-        popup:SetHeight(math.max(1, #options) * ROW_H + 4)
-
-        for i, opt in ipairs(options) do
-            local row = CreateFrame("Button", nil, popup)
-            row:SetHeight(ROW_H)
-            row:SetPoint("TOPLEFT", popup, "TOPLEFT", 2, -(i - 1) * ROW_H - 2)
-            row:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -2, -(i - 1) * ROW_H - 2)
-
-            local hl = row:CreateTexture(nil, "HIGHLIGHT")
-            hl:SetAllPoints()
-            hl:SetColorTexture(1, 0.82, 0, 0.15)
-
-            local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            if opt.icon then
-                local icon = row:CreateTexture(nil, "OVERLAY")
-                icon:SetSize(14, 14)
-                icon:SetPoint("LEFT", row, "LEFT", 5, 0)
-                icon:SetTexture(opt.icon)
-                row.icon = icon
-                label:SetPoint("LEFT", icon, "RIGHT", 5, 0)
             else
-                label:SetPoint("LEFT", 6, 0)
+                rootDescription:CreateRadio(
+                    label,
+                    function(value) return getValue() == value end,
+                    function(value)
+                        setValue(value)
+                        addon:NotifyFeature(notifyFeature)
+                        refreshText()
+                    end,
+                    option.value
+                )
             end
-            label:SetJustifyH("LEFT")
-            label:SetText(opt.label)
-            row.label = label
-
-            row:SetScript("OnClick", function()
-                if opt.action then
-                    opt.action(btn)
-                else
-                    setValue(opt.value)
-                    btnText:SetText(opt.label)
-                    addon:NotifyFeature(notifyFeature)
-                end
-                popup:Hide()
-            end)
-
-            rows[i] = { frame = row, opt = opt }
         end
+    end)
 
-        refresh()
+    function btn:Refresh()
+        if self.GenerateMenu then
+            self:GenerateMenu()
+        end
+        refreshText()
     end
 
-    local catcher = CreateFrame("Frame", nil, UIParent)
-    catcher:SetAllPoints(UIParent)
-    catcher:SetFrameStrata("DIALOG")
-    catcher:SetFrameLevel(2)
-    catcher:EnableMouse(true)
-    catcher:Hide()
-    catcher:SetScript("OnMouseDown", function()
-        popup:Hide()
-    end)
+    function btn:SetOptions(newOptions)
+        options = newOptions or {}
+        self:Refresh()
+    end
 
-    popup:HookScript("OnShow", function(self)
-        for _, p in ipairs(_openDropdownPopups) do
-            if p ~= self and p:IsShown() then p:Hide() end
-        end
-    end)
-    popup:HookScript("OnShow", function() catcher:Show(); arrow:SetTexCoord(0, 1, 0.5, 1) end)
-    popup:HookScript("OnHide", function() catcher:Hide(); arrow:SetTexCoord(0, 1, 0, 0.5) end)
-
-    btn:SetScript("OnClick", function()
-        if popup:IsShown() then
-            popup:Hide()
-        else
-            popup:ClearAllPoints()
-            popup:SetPoint("TOPLEFT", btn, "BOTTOMLEFT", 0, -2)
-            updateRowColors()
-            popup:Show()
-        end
-    end)
-
-    btn:HookScript("OnEnter", function(self)
-        self:SetBackdropBorderColor(0.8, 0.8, 0.8, 1)
-    end)
-    btn:HookScript("OnLeave", function(self)
-        if ElvUI then
-            self:SetBackdropBorderColor(unpack(ElvUI[1].media.bordercolor))
-        else
-            self:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-        end
-    end)
-
-    rebuildRows(options)
-    btn.Refresh = refresh
-    btn.SetOptions = rebuildRows
-    btn.SetDropdownWidth = function(_, width)
+    function btn:SetDropdownWidth(width)
         width = tonumber(width)
-        if not width then return end
-        btn:SetWidth(width)
-        popup:SetWidth(width)
+        if width then self:SetWidth(width) end
     end
+
+    btn._mqolRefreshControl = true
+    btn:Refresh()
     return btn
 end
 
@@ -644,7 +582,7 @@ local function BuildParentPanel()
 
     local ver = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     ver:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    ver:SetText("v1.5.2 by MathWro  |  Select a category on the left.")
+    ver:SetText("v1.8.0 by MathWro  |  Select a category on the left.")
 
     return panel
 end
@@ -667,20 +605,29 @@ local function BuildGeneralPanel()
     )
 
     local gmSlider = CreateFrame("Slider", "MathWroQOL_GameMenuSlider", gameMenuContent, "OptionsSliderTemplate")
-    gmSlider:SetPoint("TOPLEFT", gameMenuContent, "TOPLEFT", 16, -2)
+    gmSlider:SetPoint("TOPLEFT", gameMenuContent, "TOPLEFT", 16, -14)
     gmSlider:SetMinMaxValues(0.5, 2.0)
     gmSlider:SetValueStep(0.05)
     gmSlider:SetObeyStepOnDrag(true)
     gmSlider:SetWidth(220)
     _G[gmSlider:GetName() .. "Low"]:SetText("0.5x")
     _G[gmSlider:GetName() .. "High"]:SetText("2.0x")
-    _G[gmSlider:GetName() .. "Text"]:SetText("Scale: 1.0x")
+    _G[gmSlider:GetName() .. "Text"]:SetText("")
+    _G[gmSlider:GetName() .. "Text"]:Hide()
+
+    local gmScaleLabel = gameMenuContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    gmScaleLabel:SetPoint("BOTTOM", gmSlider, "TOP", 0, 2)
+    gmScaleLabel:SetTextColor(1, 1, 1, 1)
 
     local S = ElvSkin()
     if S then S:HandleSliderFrame(gmSlider) end
 
+    local function refreshGameMenuScale(value)
+        gmScaleLabel:SetFormattedText("Scale: %.2fx", value or 1)
+    end
+
     gmSlider:SetScript("OnValueChanged", function(self, value, userInput)
-        _G[self:GetName() .. "Text"]:SetText(string.format("Scale: %.2fx", value))
+        refreshGameMenuScale(value)
         if not userInput then return end
         if not addon.db.gameMenu then addon.db.gameMenu = {} end
         addon.db.gameMenu.scale = value
@@ -743,7 +690,8 @@ local function BuildGeneralPanel()
 
     local slashContainer = CreateFrame("Frame", nil, cdmContent)
     slashContainer:SetPoint("TOPLEFT", cdmEnableCB, "BOTTOMLEFT", 20, -6)
-    slashContainer:SetSize(430, 110)
+    slashContainer:SetSize(430, 1)
+    -- Child controls determine the card bottom; avoid reserving empty height.
 
     local slashLabel = slashContainer:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     slashLabel:SetPoint("TOPLEFT", slashContainer, "TOPLEFT", 0, 0)
@@ -774,7 +722,7 @@ local function BuildGeneralPanel()
     end
     cdmEnableCB:HookScript("OnClick", updateCDMGatekeeper)
 
-    cdmCard:SetBottomWidget(slashContainer, 10)
+    cdmCard:SetBottomWidget(cmCB, 10)
 
     local auctionCard, auctionContent = MakeCard(
         sc,
@@ -807,12 +755,27 @@ local function BuildGeneralPanel()
 
     auctionCard:SetBottomWidget(ahUsableCB, 10)
 
-    panel:HookScript("OnShow", function()
-        local scale = (addon.db.gameMenu and addon.db.gameMenu.scale) or 1.0
-        gmSlider:SetValue(scale)
+    local function refreshGeneralControls()
+        local gameMenu = addon.db.gameMenu or {}
+        gmSlider:SetValue(gameMenu.scale or 1.0)
+        refreshGameMenuScale(gameMenu.scale or 1.0)
+        dragCB:SetChecked(gameMenu.moveable == true)
+
+        local cdmButton = addon.db.cdmButton or {}
+        cdmEnableCB:SetChecked(cdmButton.enabled == true)
+        waCB:SetChecked(cdmButton.slashWA == true)
+        cmCB:SetChecked(cdmButton.slashCM == true)
+
+        local auctionFilter = addon.db.auctionFilter or {}
+        ahExpCB:SetChecked(auctionFilter.currentExpansionOnly == true)
+        ahUsableCB:SetChecked(auctionFilter.usableOnly == true)
+
         updateDragGatekeeper()
         updateCDMGatekeeper()
-    end)
+    end
+
+    panel:HookScript("OnShow", refreshGeneralControls)
+    refreshGeneralControls()
 
     return panel
 end
@@ -899,15 +862,17 @@ local function BuildCombatLogPanel()
     return panel
 end
 
-local function BuildUIIntegrationsPanel()
+local function BuildUIIntegrationsPanel(provider)
     local panel = CreateFrame("Frame")
-    panel.name = "UI Integrations"
+    panel.name = provider == "elvui" and "ElvUI" or "EllesmereUI"
 
-    local sc = MakePanelScaffold(panel, "UI Integrations", "MathWroQOL_UIIntegrationsScroll")
-    local elvuiLoaded = ElvUI ~= nil
-    local ellesmereActionBarsLoaded = IsAddonLoaded("EllesmereUIActionBars")
-    local ellesmereRaidFramesLoaded = IsAddonLoaded("EllesmereUIRaidFrames")
-    local vehicleProviderLoaded = elvuiLoaded or ellesmereActionBarsLoaded
+    local sc = MakePanelScaffold(panel, panel.name, "MathWroQOL_" .. panel.name .. "Scroll")
+    local elvuiLoaded = provider == "elvui" and ElvUI ~= nil
+    local ellesmereUILoaded = provider == "ellesmere" and EllesmereUI ~= nil
+    local ellesmereActionBarsLoaded = ellesmereUILoaded and IsAddonLoaded("EllesmereUIActionBars")
+    local ellesmereRaidFramesLoaded = ellesmereUILoaded and IsAddonLoaded("EllesmereUIRaidFrames")
+    local vehicleProviderLoaded = (provider == "elvui" and elvuiLoaded)
+        or (provider == "ellesmere" and ellesmereActionBarsLoaded)
     local rootAnchor = CreateFrame("Frame", nil, sc)
     rootAnchor:SetSize(1, 1)
     rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
@@ -916,7 +881,9 @@ local function BuildUIIntegrationsPanel()
         sc,
         rootAnchor,
         "Vehicle Bar Visibility",
-        "Keep selected action bars visible while in vehicle combat, including override bar states. Prevents mouseover fade from hiding bars during these encounters."
+        provider == "elvui"
+            and "Keep selected ElvUI action bars visible while in vehicle combat, including override bar states. Prevents mouseover fade from hiding bars during these encounters."
+            or "Keep selected EllesmereUI Action Bars visible while in vehicle combat, including override bar states. Prevents mouseover fade from hiding bars during these encounters."
     )
 
     local notice
@@ -924,7 +891,9 @@ local function BuildUIIntegrationsPanel()
         notice = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
         notice:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
         notice:SetTextColor(1, 0.3, 0.3)
-        notice:SetText("ElvUI or EllesmereUI Action Bars must be loaded.")
+        notice:SetText(provider == "elvui"
+            and "ElvUI must be loaded to use these options."
+            or "EllesmereUI Action Bars must be loaded to use these options.")
     end
 
     local enabledCB = MakeCheckbox(content, "Enable", 0, 0,
@@ -945,7 +914,8 @@ local function BuildUIIntegrationsPanel()
 
     local barsContainer = CreateFrame("Frame", nil, content)
     barsContainer:SetPoint("TOPLEFT", enabledCB, "BOTTOMLEFT", 20, -6)
-    barsContainer:SetSize(430, 170)
+    barsContainer:SetSize(430, 1)
+    -- Child controls determine the card bottom; avoid reserving empty height.
 
     local barsLabel = barsContainer:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     barsLabel:SetPoint("TOPLEFT", barsContainer, "TOPLEFT", 0, 0)
@@ -990,7 +960,90 @@ local function BuildUIIntegrationsPanel()
         SetChildrenEnabled(barsContainer, false)
     end
 
-    card:SetBottomWidget(barsContainer, 10)
+    card:SetBottomWidget(barRefs[10], 10)
+    if provider == "ellesmere" then
+        local buffCard, buffContent = MakeCard(
+            sc,
+            card,
+            "Buff Health Color",
+            "EllesmereUI Raid Frames provides this natively through its Buff Manager. Create an indicator and choose Health Bar Color."
+        )
+        local guidance = buffContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        guidance:SetPoint("TOPLEFT", buffContent, "TOPLEFT", 12, -2)
+        guidance:SetWidth(430)
+        guidance:SetJustifyH("LEFT")
+        if ellesmereRaidFramesLoaded then
+            guidance:SetTextColor(1, 0.82, 0.2)
+            guidance:SetText("Already built into EllesmereUI Raid Frames: create a Buff Manager indicator and choose Health Bar Color.")
+        else
+            guidance:SetTextColor(1, 0.3, 0.3)
+            guidance:SetText("EllesmereUI Raid Frames must be loaded to use native Buff Manager health bar coloring.")
+        end
+        buffCard:SetBottomWidget(guidance, 12)
+        local euiNudgeCard, euiNudgeContent = MakeCard(
+            sc,
+            buffCard,
+            "Unlock Mode Nudge",
+            "Shows arrow controls and EUI-consistent pixel coordinates while selecting a mover in EllesmereUI Unlock Mode."
+        )
+
+        local euiNudgeAvailable = ellesmereUILoaded
+            and EllesmereUI
+            and EllesmereUI.RegisterUnlockModeListener
+        local euiNudgeNotice
+        if not euiNudgeAvailable then
+            euiNudgeNotice = euiNudgeContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            euiNudgeNotice:SetPoint("TOPLEFT", euiNudgeContent, "TOPLEFT", 12, -2)
+            euiNudgeNotice:SetWidth(430)
+            euiNudgeNotice:SetJustifyH("LEFT")
+            euiNudgeNotice:SetTextColor(1, 0.3, 0.3)
+            euiNudgeNotice:SetText("EllesmereUI Unlock Mode must be loaded to use this option.")
+        end
+
+        local euiNudgeCB = MakeCheckbox(euiNudgeContent, "Enable nudge overlay", 0, 0,
+            function()
+                return addon.db.editModeNudge
+                    and addon.db.editModeNudge.ellesmereEnabled == true
+            end,
+            function(val)
+                if addon.db.editModeNudge then
+                    addon.db.editModeNudge.ellesmereEnabled = val
+                    addon:NotifyFeature("editModeNudge")
+                end
+            end
+        )
+        euiNudgeCB:ClearAllPoints()
+        if euiNudgeNotice then
+            euiNudgeCB:SetPoint("TOPLEFT", euiNudgeNotice, "BOTTOMLEFT", -4, -8)
+        else
+            euiNudgeCB:SetPoint("TOPLEFT", euiNudgeContent, "TOPLEFT", 12, -2)
+        end
+
+        local euiNudgeDetails = CreateFrame("Frame", nil, euiNudgeContent)
+        euiNudgeDetails:SetPoint("TOPLEFT", euiNudgeCB, "BOTTOMLEFT", 20, -6)
+        euiNudgeDetails:SetSize(430, 40)
+        local euiNudgeDetailText = euiNudgeDetails:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        euiNudgeDetailText:SetPoint("TOPLEFT", euiNudgeDetails, "TOPLEFT", 0, 0)
+        euiNudgeDetailText:SetWidth(420)
+        euiNudgeDetailText:SetJustifyH("LEFT")
+        euiNudgeDetailText:SetText("Enable this separately from Blizzard Edit Mode nudging. Coordinates and movement use EllesmereUI's pixel grid.")
+
+        local function updateEuiNudgeGatekeeper()
+            SetChildrenEnabled(euiNudgeDetails,
+                euiNudgeAvailable
+                and addon.db.editModeNudge
+                and addon.db.editModeNudge.ellesmereEnabled == true)
+        end
+        euiNudgeCB:HookScript("OnClick", updateEuiNudgeGatekeeper)
+        if not euiNudgeAvailable then
+            euiNudgeCB:Disable()
+            euiNudgeCB:SetAlpha(0.4)
+        end
+        euiNudgeCard:SetBottomWidget(euiNudgeDetails, 10)
+        panel:HookScript("OnShow", updateEuiNudgeGatekeeper)
+
+        return panel
+    end
 
     local buffCard, buffContent = MakeCard(
         sc,
@@ -1838,10 +1891,10 @@ local function BuildEditModePanel()
         sc,
         rootAnchor,
         "Nudge Overlay",
-        "Shows arrow buttons and exact coordinates when selecting a UI element in Edit Mode. Click arrows to nudge 1 px, Shift-click for 10 px."
+        "Shows arrow buttons and exact coordinates for Blizzard Edit Mode and LibEditMode selections. EllesmereUI Unlock Mode has its own toggle under the EllesmereUI integration settings."
     )
 
-    local nudgeCB = MakeCheckbox(content, "Enable nudge overlay", 0, 0,
+    local nudgeCB = MakeCheckbox(content, "Enable Edit Mode nudge overlay", 0, 0,
         function() return addon.db.editModeNudge and addon.db.editModeNudge.enabled end,
         function(val)
             if not addon.db.editModeNudge then addon.db.editModeNudge = {} end
@@ -1860,7 +1913,7 @@ local function BuildEditModePanel()
     details:SetPoint("TOPLEFT", detailsContainer, "TOPLEFT", 0, 0)
     details:SetWidth(420)
     details:SetJustifyH("LEFT")
-    details:SetText("Applies while Edit Mode is active.")
+    details:SetText("Enable the nudge overlay to show arrow controls and exact frame coordinates while editing.")
 
     local function updateNudgeGatekeeper()
         SetChildrenEnabled(detailsContainer, addon.db.editModeNudge and addon.db.editModeNudge.enabled == true)
@@ -1888,12 +1941,12 @@ local function BuildDebugPanel()
         sc,
         rootAnchor,
         "Buff Health Color",
-        "Prints diagnostic details for the selected unit token to the chat frame."
+        "Prints ElvUI Buff Health Color diagnostic details for the selected unit token to the chat frame."
     )
 
     local buttons = CreateFrame("Frame", nil, content)
     buttons:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -2)
-    buttons:SetSize(430, 56)
+    buttons:SetSize(430, 28)
 
     local units = {
         { label = "Target", unit = "target" },
@@ -1928,6 +1981,10 @@ local function BuildDebugPanel()
         btn:SetScript("OnClick", function()
             runBuffDebug(option.unit)
         end)
+        if not ElvUI then
+            btn:Disable()
+            btn:SetAlpha(0.4)
+        end
     end
 
     card:SetBottomWidget(buttons, 10)
@@ -1936,7 +1993,7 @@ local function BuildDebugPanel()
         sc,
         card,
         "Vehicle Bar",
-        "Prints ElvUI action bar, vehicle state, and action slot diagnostics to the chat frame."
+        "Prints ElvUI or EllesmereUI Action Bars, vehicle state, and action slot diagnostics to the chat frame."
     )
 
     local vehicleButtons = CreateFrame("Frame", nil, vehicleContent)
@@ -1970,6 +2027,13 @@ local function BuildDebugPanel()
     vehicleWatchBtn:SetScript("OnClick", function()
         runVehicleDebug("watch")
     end)
+
+    if not ElvUI and not EllesmereUI then
+        vehicleStateBtn:Disable()
+        vehicleStateBtn:SetAlpha(0.4)
+        vehicleWatchBtn:Disable()
+        vehicleWatchBtn:SetAlpha(0.4)
+    end
 
     vehicleCard:SetBottomWidget(vehicleButtons, 10)
 
@@ -2061,7 +2125,7 @@ local function BuildCombatTrackerPanel()
 
     local function MakeOptionRow(parent, labelText, controlFn)
         local row = CreateFrame("Frame", nil, parent)
-        row:SetHeight(24)
+        row:SetHeight(28)
         row:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
 
         local lbl = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -2941,17 +3005,18 @@ frame:SetScript("OnEvent", function(self, event, arg1)
     local generalPanel = BuildGeneralPanel()
     local combatLogPanel = BuildCombatLogPanel()
     local combatTrackerPanel = BuildCombatTrackerPanel()
-    local uiIntegrationsPanel = BuildUIIntegrationsPanel()
+    local elvuiPanel = BuildUIIntegrationsPanel("elvui")
+    local ellesmereUIPanel = BuildUIIntegrationsPanel("ellesmere")
     local cdmPluginsPanel = BuildCDMPluginsPanel()
     local editModePanel = BuildEditModePanel()
     local debugPanel = BuildDebugPanel()
-
     if Settings and Settings.RegisterCanvasLayoutCategory then
         local parentCat = Settings.RegisterCanvasLayoutCategory(parentPanel, parentPanel.name)
         local generalCat = Settings.RegisterCanvasLayoutSubcategory(parentCat, generalPanel, generalPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatLogPanel, combatLogPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatTrackerPanel, combatTrackerPanel.name)
-        Settings.RegisterCanvasLayoutSubcategory(parentCat, uiIntegrationsPanel, uiIntegrationsPanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel, elvuiPanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, ellesmereUIPanel, ellesmereUIPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, cdmPluginsPanel, cdmPluginsPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, editModePanel, editModePanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, debugPanel, debugPanel.name)
@@ -2966,7 +3031,8 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         InterfaceOptions_AddCategory(generalPanel, parentPanel)
         InterfaceOptions_AddCategory(combatLogPanel, parentPanel)
         InterfaceOptions_AddCategory(combatTrackerPanel, parentPanel)
-        InterfaceOptions_AddCategory(uiIntegrationsPanel, parentPanel)
+        InterfaceOptions_AddCategory(elvuiPanel, parentPanel)
+        InterfaceOptions_AddCategory(ellesmereUIPanel, parentPanel)
         InterfaceOptions_AddCategory(cdmPluginsPanel, parentPanel)
         InterfaceOptions_AddCategory(editModePanel, parentPanel)
         InterfaceOptions_AddCategory(debugPanel, parentPanel)

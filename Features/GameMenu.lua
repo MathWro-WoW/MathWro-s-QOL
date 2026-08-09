@@ -7,7 +7,7 @@ local DEFAULT_SCALE = 1.0
 local DEFAULT_POINT = { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", x = 0, y = 0 }
 
 local function applyPosition(db)
-    local p = db.gameMenu.position
+    local p = db.position
     if not p then return end
     GameMenuFrame:ClearAllPoints()
     GameMenuFrame:SetPoint(p.point, _G[p.relativeTo] or UIParent, p.relativePoint, p.x, p.y)
@@ -23,7 +23,7 @@ local function enableDrag(db)
     if not GameMenuFrame._mqolShowHooked then
         GameMenuFrame:HookScript("OnShow", function()
             if addon.db.gameMenu.moveable and addon.db.gameMenu.position then
-                applyPosition(addon.db)
+                applyPosition(addon.db.gameMenu)
             end
         end)
         GameMenuFrame._mqolShowHooked = true

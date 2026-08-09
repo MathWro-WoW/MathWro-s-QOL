@@ -124,7 +124,7 @@ Four surfaces to wire:
 | CMC Masque | `CMCMasque.lua` | `cmcMasque` | Registers CooldownManagerCentered Essential, Utility, and Buff Icon viewer buttons with Masque when both addons are loaded |
 | Auction Filter | `AuctionFilter.lua` | `auctionFilter` | Pre-enables AH filters on open |
 | Combat Log | `CombatLog.lua` | `combatLog` | Auto-starts/stops combat logging by instance type and level cap |
-| Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Arrow buttons + coordinate display for native Edit Mode frames and LibEditMode-registered custom frames |
+| Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Provider-split arrow buttons + coordinate display: `enabled` covers native Edit Mode/LibEditMode; `ellesmereEnabled` covers EllesmereUI Unlock Mode and is disabled by default |
 | Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring for configured player-cast buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs. Each buff profile has frame, color, and specialization filters. EllesmereUI Raid Frames already provides equivalent Health Bar Color indicators in its Buff Manager, so MathWroQOL does not duplicate that runtime |
 | Combat Tracker | `CombatTracker.lua` + 3 section files | `combatTracker` | Cooldown icon display system (racials, trinkets, consumables) |
 
@@ -176,10 +176,11 @@ Settings panels registered via `Settings.RegisterCanvasLayoutCategory` / `Settin
 - **Parent** — "MathWro QOL" (container, no interactive controls)
   - **General** — GameMenu scaling / drag / reset position; CombatLog instance toggles + level filter
   - **Combat Tracker** — master enable; per-section collapsible blocks (Racials, Trinkets, Consumables)
-  - **UI Integrations** — VehicleBar per-bar visibility toggles for ElvUI or EllesmereUI Action Bars; ElvUI Buff Health Color controls and EllesmereUI built-in guidance
+  - **ElvUI** — ElvUI Vehicle Bar visibility and Buff Health Color controls; all controls disabled when ElvUI is absent
+  - **EllesmereUI** — EllesmereUI Action Bars visibility, native Raid Frames Buff Manager guidance, and the optional Unlock Mode Nudge toggle; controls disabled when the required module is absent
   - **CDM Plugins** — CooldownManagerCentered compatibility options such as Masque skinning
-  - **Edit Mode** — EditModeNudge enable toggle
-  - **Debug** — troubleshooting actions such as Buff Health Color unit diagnostics
+  - **Edit Mode** — EditModeNudge enable toggle for Blizzard Edit Mode and LibEditMode selections
+  - **Debug** — provider-gated troubleshooting actions for Buff Health Color and Vehicle Bar
 
 `/mqol` opens the panel via `Settings.OpenToCategory(parentCat:GetID())` (fallback: `InterfaceOptionsFrame_OpenToCategory`).
 
@@ -308,10 +309,12 @@ General event rules:
 ## ElvUI and EllesmereUI Integration
 
 - Provider-dependent files must return early only when none of their supported providers is loaded.
+- Provider-specific hooks and runtime branches must be registered and executed only when that provider is loaded. A shared feature may remain registered, but its callbacks must return before touching an absent provider.
 - Access ElvUI via `local E = ElvUI[1]`; modules via `E:GetModule("ModuleName", true)`.
 - Access EllesmereUI modules through `EllesmereUI.Lite.GetAddon("<folder>", true)`. EllesmereUI action bar frames are named `EABBar_MainBar` and `EABBar_Bar2` through `EABBar_Bar10`.
 - ElvUI visibility uses `RegisterStateDriver(frame, "visibility", condition)`. EllesmereUI Action Bars uses `RegisterAttributeDriver(frame, "state-visibility", condition)`. Compatibility hooks need an `applying` guard for both APIs.
-- Config.lua always builds the UI Integrations panel. Provider-specific controls are disabled and greyed when their provider is absent.
+- `EditModeNudge` integrates with EllesmereUI through `RegisterUnlockModeListener`, registered mover frame discovery, and the `_unlockNudge(dx, dy, mover, skipCollapse)` bridge. Its EllesmereUI toggle is independent from native Edit Mode/LibEditMode nudging, defaults off, and reuses EUI's own coordinate readout for pixel parity. Both provider-specific hooks return when their toggle is disabled or the provider is unavailable.
+- Config.lua always builds separate ElvUI and EllesmereUI submenus. Provider-specific controls are disabled and greyed when their provider or required module is absent.
 - Do not duplicate EllesmereUI Raid Frames' Buff Manager. Its `Health Bar Color` indicator already covers player-cast healer buffs with per-spell ownership and color settings.
 - Game-menu integrations must discover visible, menu-sized custom `Button` children between Shop/Options and AddOns after deferred layout settles. CDM stays hidden during peer discovery so geometry-based integrations cannot anchor to each other and drift. Shift only the pooled lower section, and only by the measured collision amount; do not hardcode provider button names or fixed menu growth.
 - CDM Button styling is mutually exclusive: use ElvUI when only ElvUI is active, the exact EllesmereUI popup-menu skin when only EllesmereUI is active, and native Blizzard styling when both or neither suite is active.

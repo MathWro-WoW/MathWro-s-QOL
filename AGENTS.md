@@ -23,27 +23,25 @@ There is **no build step, linter, or automated test runner**. Validate manually:
 3. Check for Lua errors in the default WoW error frame, or via `!BugGrabber` / `BugSack`
 
 ### Per-feature Validation
-
 | Feature | How to test |
 |---|---|
-| `GameMenu.lua` | Press Escape; verify scale, drag, button placement |
-| `CDMButton.lua` | Press Escape; verify CDM button appears and slash commands work |
+| `GameMenu.lua` | Press Escape; verify scale, drag, button placement, and Reset Position |
+| `CDMButton.lua` | Press Escape; verify the CDM button appears and slash commands work |
 | `AuctionFilter.lua` | Open Auction House; confirm configured filters are pre-enabled |
 | `CombatLog.lua` | Enter/leave an enabled instance type; confirm logging starts/stops |
-| `VehicleBar.lua` | Enter a vehicle with ElvUI loaded; verify selected bars stay visible |
-| `EditModeNudge.lua` | Enter Edit Mode; select a frame; verify arrow buttons and coordinate display |
+| `VehicleBar.lua` | Test selected bars with ElvUI and EllesmereUI Action Bars independently when available |
+| `EditModeNudge.lua` | Test native Edit Mode/LibEditMode and EllesmereUI Unlock Mode independently |
 | `CombatTracker.lua` | Enable in `/mqol`; enter combat; verify icons and cooldowns update |
-| `Config.lua` | Run `/mqol`; verify all panels, controls, and layout render correctly |
+| `Config.lua` | Run `/mqol`; verify provider-specific submenus, disabled dependency states, controls, and first-open layout |
 
 ---
 
 ## Releases
-
-GitHub Actions only. Tag and push:
+GitHub Actions only. The current minor release line is `v1.8.0`.
 
 ```bash
-git tag v1.2.3
-git push origin v1.2.3
+git tag v1.8.0
+git push origin v1.8.0
 ```
 
 Triggers `.github/workflows/release.yml` → `BigWigsMods/packager@v2`.
