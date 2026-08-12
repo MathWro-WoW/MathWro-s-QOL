@@ -6,7 +6,7 @@ Full architecture reference: `docs/ARCHITECTURE.md`. Read it before making code 
 
 ## Critical Constraints
 
-- Interface version: `120005` — **single value only** (BigWigs packager breaks on comma-separated)
+- Interface version: `120100` — **single value only** (BigWigs packager breaks on comma-separated)
 - TOC filename must match folder exactly: `MathWroQOL.toc` inside `MathWroQOL/`
 - All hardcoded addon name strings must use `"MathWroQOL"` (e.g. `ADDON_LOADED` checks)
 - `local` everything — no global namespace pollution

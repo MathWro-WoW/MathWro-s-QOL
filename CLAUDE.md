@@ -8,7 +8,7 @@ Read `docs/ARCHITECTURE.md` before making any code changes. It is the canonical 
 
 ## Current Addon Conventions
 
-- Target interface: `120005` in `MathWroQOL.toc`; keep it as one value.
+- Target interface: `120100` in `MathWroQOL.toc`; keep it as one value.
 - Config.lua exposes separate ElvUI and EllesmereUI submenus; provider controls must be disabled when dependencies are unavailable.
 - Provider-specific runtime hooks must not register or execute when their provider is absent.
 

@@ -81,6 +81,13 @@ local function getButtonRegions(button)
 
     return regions
 end
+local function getViewerButtons(viewer)
+    if not viewer then return {} end
+    if viewer.GetItemFrames then
+        return viewer:GetItemFrames()
+    end
+    return { viewer:GetChildren() }
+end
 
 local function unregisterViewer(key)
     if not groups or not groups[key] or not registered[key] then return end
@@ -105,7 +112,7 @@ local function registerViewer(key)
     if not group or not viewer then return end
 
     local active = {}
-    for _, child in ipairs({ viewer:GetChildren() }) do
+    for _, child in ipairs(getViewerButtons(viewer)) do
         local regions = getButtonRegions(child)
         if regions then
             active[child] = true

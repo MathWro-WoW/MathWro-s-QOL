@@ -5,6 +5,7 @@ Instructions for AI agents (Codex, OpenCode) operating in this repository.
 ## Architecture Reference
 
 Read `docs/ARCHITECTURE.md` before writing or modifying any code. It contains the canonical reference for load order, feature contracts, code style, naming conventions, Config.lua helpers, performance rules, and WoW API pitfalls.
+- Target Retail interface: `120100` in `MathWroQOL.toc`; keep it as one value.
 
 ---
 
@@ -15,7 +16,6 @@ Agents should consult the WoW API documentation which is available via the MCP S
 ---
 
 ## Build / Lint / Test
-
 There is **no build step, linter, or automated test runner**. Validate manually:
 
 1. Load the addon in WoW Retail (`_retail_`)
@@ -30,6 +30,7 @@ There is **no build step, linter, or automated test runner**. Validate manually:
 | `AuctionFilter.lua` | Open Auction House; confirm configured filters are pre-enabled |
 | `CombatLog.lua` | Enter/leave an enabled instance type; confirm logging starts/stops |
 | `VehicleBar.lua` | Test selected bars with ElvUI and EllesmereUI Action Bars independently when available |
+| `BuffHealthColor.lua` | With ElvUI, test configured spell IDs on player, target, party, and raid frames; verify restricted aura updates produce no Lua errors |
 | `EditModeNudge.lua` | Test native Edit Mode/LibEditMode and EllesmereUI Unlock Mode independently |
 | `CombatTracker.lua` | Enable in `/mqol`; enter combat; verify icons and cooldowns update |
 | `Config.lua` | Run `/mqol`; verify provider-specific submenus, disabled dependency states, controls, and first-open layout |
@@ -37,11 +38,11 @@ There is **no build step, linter, or automated test runner**. Validate manually:
 ---
 
 ## Releases
-GitHub Actions only. The current minor release line is `v1.8.0`.
+GitHub Actions only. The current minor release line is `v1.9.0`.
 
 ```bash
-git tag v1.8.0
-git push origin v1.8.0
+git tag v1.9.0
+git push origin v1.9.0
 ```
 
 Triggers `.github/workflows/release.yml` → `BigWigsMods/packager@v2`.

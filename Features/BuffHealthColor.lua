@@ -76,7 +76,6 @@ local E = ElvUI[1]
 local UF = E and E:GetModule("UnitFrames", true)
 local GetPlayerAuraBySpellID = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID
 local GetUnitAuraBySpellID = C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID
-local GetAuraDataByIndex = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
 local isSecretValue = issecretvalue or function() return false end
 
 local eventFrames = {}
@@ -203,13 +202,32 @@ local function isSelectedFrame(profile, frame, unit)
     return false
 end
 
+local function getAuraBySpellID(unit, spellID)
+    local query = unit == "player" and GetPlayerAuraBySpellID or GetUnitAuraBySpellID
+    if not query then return nil end
+
+    local ok, auraData
+    if unit == "player" then
+        ok, auraData = pcall(query, spellID)
+    else
+        ok, auraData = pcall(query, unit, spellID)
+    end
+    if not ok or not auraData or isSecretValue(auraData) then return nil end
+    return auraData
+end
+
 local function auraDataMatchesSpellID(auraData, spellID)
-    local auraSpellID = auraData and auraData.spellId
-    local sourceUnit = auraData and auraData.sourceUnit
-    return auraSpellID
-        and not isSecretValue(auraSpellID)
-        and auraSpellID == spellID
-        and sourceUnit == "player"
+    if not auraData or isSecretValue(auraData) then return false end
+
+    local ok, matches = pcall(function()
+        local auraSpellID = auraData.spellId
+        local sourceUnit = auraData.sourceUnit
+        return not isSecretValue(auraSpellID)
+            and auraSpellID == spellID
+            and not isSecretValue(sourceUnit)
+            and sourceUnit == "player"
+    end)
+    return ok and matches == true
 end
 
 local function getCurrentSpecID()
@@ -276,69 +294,42 @@ end
 local function getUnitAuraState(unit)
     local state = auraState[unit]
     if not state then
-        state = { spells = {}, instances = {} }
+        state = { spells = {} }
         auraState[unit] = state
     end
     return state
 end
 
-local function addTrackedAura(state, auraData)
-    if not auraData or not auraData.auraInstanceID then return false end
-
-    local spellID = auraData.spellId
-    if isSecretValue(spellID) or not activeSpellIDs[spellID] or auraData.sourceUnit ~= "player" then return false end
-
-    if state.instances[auraData.auraInstanceID] == spellID then return false end
-
-    state.instances[auraData.auraInstanceID] = spellID
-    state.spells[spellID] = (state.spells[spellID] or 0) + 1
-    return true
-end
-
-local function removeTrackedAura(state, auraInstanceID)
-    local spellID = state.instances[auraInstanceID]
-    if not spellID then return false end
-
-    state.instances[auraInstanceID] = nil
-    local count = (state.spells[spellID] or 1) - 1
-    state.spells[spellID] = count > 0 and count or nil
-    return true
-end
-
 local function scanUnitAuras(unit)
     local state = getUnitAuraState(unit)
     state.spells = {}
-    state.instances = {}
 
     if not unit or not UnitExists(unit) then return state end
 
-    if AuraUtil and AuraUtil.ForEachAura then
-        AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(auraData)
-            addTrackedAura(state, auraData)
-        end, true)
-    elseif GetAuraDataByIndex then
-        for i = 1, 40 do
-            local ok, auraData = pcall(GetAuraDataByIndex, unit, i, "HELPFUL")
-            if not ok or not auraData then break end
-            addTrackedAura(state, auraData)
+    for spellID in pairs(activeSpellIDs) do
+        local auraData = getAuraBySpellID(unit, spellID)
+        if auraDataMatchesSpellID(auraData, spellID) then
+            state.spells[spellID] = true
         end
     end
 
     return state
 end
 
-local function updateTrackedAuraByInstanceID(unit, state, auraInstanceID)
-    local wasTracked = removeTrackedAura(state, auraInstanceID)
-    local auraData
-    if C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
-        auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
+local function sameSpellSet(first, second)
+    for spellID in pairs(first or {}) do
+        if not second[spellID] then return false end
     end
-
-    local isTracked = addTrackedAura(state, auraData)
-    return wasTracked or isTracked
+    for spellID in pairs(second or {}) do
+        if not first or not first[spellID] then return false end
+    end
+    return true
 end
 
-local function processUnitAuraUpdate(unit, updateInfo)
+-- 12.1 makes index-, slot-, and instance-ID aura data secret while aura data
+-- is restricted. Re-query only by spell ID; the event payload is intentionally
+-- ignored because it can be a fully secret value.
+local function processUnitAuraUpdate(unit)
     if not unit then return false end
 
     if not activeProfilesReady then
@@ -346,33 +337,9 @@ local function processUnitAuraUpdate(unit, updateInfo)
     end
     if #activeProfiles == 0 then return false end
 
-    if not updateInfo or updateInfo.isFullUpdate or not auraState[unit] then
-        scanUnitAuras(unit)
-        return true
-    end
-
-    local state = getUnitAuraState(unit)
-    local changed = false
-
-    if updateInfo.removedAuraInstanceIDs then
-        for _, auraInstanceID in ipairs(updateInfo.removedAuraInstanceIDs) do
-            changed = removeTrackedAura(state, auraInstanceID) or changed
-        end
-    end
-
-    if updateInfo.addedAuras then
-        for _, auraData in ipairs(updateInfo.addedAuras) do
-            changed = addTrackedAura(state, auraData) or changed
-        end
-    end
-
-    if updateInfo.updatedAuraInstanceIDs then
-        for _, auraInstanceID in ipairs(updateInfo.updatedAuraInstanceIDs) do
-            changed = updateTrackedAuraByInstanceID(unit, state, auraInstanceID) or changed
-        end
-    end
-
-    return changed
+    local previous = auraState[unit] and auraState[unit].spells
+    local state = scanUnitAuras(unit)
+    return not previous or not sameSpellSet(previous, state.spells)
 end
 
 local function unitHasTrackedBuff(unit, spellID)
@@ -381,8 +348,9 @@ local function unitHasTrackedBuff(unit, spellID)
         state = scanUnitAuras(unit)
     end
 
-    return state.spells[spellID] ~= nil
+    return state.spells[spellID] == true
 end
+
 
 local function findMatchingProfile(db, healthBar, unit)
     local frame = healthBar and healthBar:GetParent()
@@ -470,43 +438,17 @@ end
 
 local function getAuraDebug(unit, spellID)
     local debug = { any = false, player = false, sources = {} }
-    local seenSources = {}
+    local auraData = getAuraBySpellID(unit, spellID)
+    if not auraData then return debug end
 
-    local function addAura(auraData)
-        if not auraData or auraData.spellId ~= spellID then return end
-
-        debug.any = true
-        if auraData.sourceUnit == "player" then debug.player = true end
-
-        local source = tostring(auraData.sourceUnit or "nil")
-        if not seenSources[source] then
-            table.insert(debug.sources, source)
-            seenSources[source] = true
-        end
+    debug.any = true
+    local ok, sourceUnit = pcall(function() return auraData.sourceUnit end)
+    if not ok or isSecretValue(sourceUnit) then
+        table.insert(debug.sources, "secret")
+    else
+        debug.player = sourceUnit == "player"
+        table.insert(debug.sources, tostring(sourceUnit or "nil"))
     end
-
-    if unit == "player" and GetPlayerAuraBySpellID then
-        local ok, auraData = pcall(GetPlayerAuraBySpellID, spellID)
-        if ok then addAura(auraData) end
-    end
-
-    if GetUnitAuraBySpellID then
-        local ok, auraData = pcall(GetUnitAuraBySpellID, unit, spellID)
-        if ok then addAura(auraData) end
-    end
-
-    if AuraUtil and AuraUtil.ForEachAura then
-        AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(auraData)
-            addAura(auraData)
-        end, true)
-    elseif GetAuraDataByIndex then
-        for i = 1, 40 do
-            local ok, auraData = pcall(GetAuraDataByIndex, unit, i, "HELPFUL")
-            if not ok or not auraData then break end
-            addAura(auraData)
-        end
-    end
-
     return debug
 end
 

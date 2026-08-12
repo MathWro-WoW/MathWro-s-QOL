@@ -7,7 +7,7 @@ All AI instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instruction
 
 ## Interface Version & TOC
 
-- Target: `120005` (Midnight 12.0.5). **Single value only** — the BigWigs packager breaks on comma-separated values.
+- Target: `120100` (Midnight 12.1.0). **Single value only** — the BigWigs packager breaks on comma-separated values.
 - The `.toc` filename must exactly match the addon folder name: `MathWroQOL.toc` inside `MathWroQOL/`. Mismatch = addon invisible in-game.
 - Any hardcoded addon name strings (e.g. `ADDON_LOADED` checks) must use `"MathWroQOL"`.
 - Optional addon integrations are declared via `## OptionalDeps:` so ElvUI, EllesmereUI modules, Masque, and CooldownManagerCentered load first when present.
@@ -391,5 +391,6 @@ end
 - **Vehicle-like state detection**: `HasOverrideActionBar() or HasVehicleActionBar() or IsPossessBarVisible() or UnitExists("vehicle")`. Override-bar shapeshifts trigger `HasOverrideActionBar()` but NOT `UNIT_ENTERED_VEHICLE`.
 - **Inventory API availability**: `GetInventoryItemID()` and related calls are not reliable at `PLAYER_LOGIN`. Use `PLAYER_ENTERING_WORLD` instead (see `CombatTracker_Trinkets.lua`).
 - **`C_Spell.GetSpellInfo()` has no cooldown field**: The `SpellInfo` struct only contains `name`, `iconID`, `originalIconID`, `castTime`, `minRange`, `maxRange`, `spellID`, `rank`. There is no `cooldownMS`. To get a spell's base cooldown, use `GetSpellBaseCooldown(spellID)` which returns `cooldownMS, gcdMS` (both in milliseconds, unrestricted).
+- **12.1 aura restrictions**: `C_UnitAuras` index-, slot-, and instance-ID queries plus `UNIT_AURA` payload data can be secret while aura data is restricted. `BuffHealthColor` uses spell-ID queries only and ignores the event payload; restricted or private auras therefore cannot be inspected by addon Lua.
 - **ElvUI skinning game menu button**: Apply via `hooksecurefunc(GameMenuFrame, "InitButtons", fn)` → `E:GetModule("Skins"):HandleButton(btn, nil, nil, nil, true)`. Guard with a `IsSkinned` flag to avoid re-skinning.
 - **Lazy frame creation**: Prefer `local function EnsureWidget()` pattern for UI that may never be needed. Named globals get the `MathWroQOL_` prefix and explicit `FrameStrata`/`FrameLevel`.

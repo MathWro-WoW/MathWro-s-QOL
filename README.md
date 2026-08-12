@@ -1,6 +1,12 @@
 # MathWro QOL
 
-A personal World of Warcraft addon for quality-of-life tweaks. Built for Midnight (patch 12.x).
+A personal World of Warcraft addon for quality-of-life tweaks. Built for Midnight patch 12.1.0 (`120100`).
+
+## Compatibility
+
+The addon targets Retail patch 12.1.0. `Buff Health Color` uses spell-ID aura queries only; Blizzard may restrict private or combat aura data, so those auras cannot be inspected by addon Lua. EllesmereUI Raid Frames provides its own 12.1 Aura Container-based buff indicators and MathWroQOL does not duplicate that runtime.
+
+Provider integrations are optional and remain inactive when their provider is unavailable. CooldownManagerCentered viewer skinning requires both CooldownManagerCentered and Masque to be loaded.
 
 ## Features
 
