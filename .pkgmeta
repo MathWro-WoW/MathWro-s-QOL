@@ -9,4 +9,5 @@ ignore:
   - .github
   - AGENTS.md
   - CLAUDE.md
+  - tests
   - docs

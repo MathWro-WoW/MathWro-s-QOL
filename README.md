@@ -4,7 +4,7 @@ A personal World of Warcraft addon for quality-of-life tweaks. Built for Midnigh
 
 ## Compatibility
 
-The addon targets Retail patch 12.1.0. `Buff Health Color` uses spell-ID aura queries only; Blizzard may restrict private or combat aura data, so those auras cannot be inspected by addon Lua. EllesmereUI Raid Frames provides its own 12.1 Aura Container-based buff indicators and MathWroQOL does not duplicate that runtime.
+The addon targets Retail patch 12.1.0. `Buff Health Color` uses Blizzard's secure Aura Container system, so restricted combat aura presence stays engine-managed instead of being read by addon Lua. EllesmereUI Raid Frames provides its own Aura Container-based buff indicators and MathWroQOL does not duplicate that runtime.
 
 Provider integrations are optional and remain inactive when their provider is unavailable. CooldownManagerCentered viewer skinning requires both CooldownManagerCentered and Masque to be loaded.
 
@@ -56,7 +56,7 @@ Adds the same arrow controls to EllesmereUI Unlock Mode movers and uses EUI's na
 Keep selected action bars (1–10) visible during vehicle combat and override bar states (e.g. shapeshift-style encounters). Handles each provider's secure visibility drivers and prevents its mouseover fade from hiding selected bars while usable vehicle abilities are active. Normal visibility and fade behaviour are restored on exit. By default only bar 1 is enabled.
 
 **Buff Health Color — ElvUI** *(requires ElvUI)*
-Recolor selected ElvUI unit frame health bars while units have configured player-cast buffs. Includes per-buff settings for Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, plus custom spell IDs that add more buff profiles alongside the built-ins. Each buff can be enabled, colored, assigned to player, target, party, or ElvUI raid frame sizes, and restricted to relevant player specializations independently.
+Recolor selected ElvUI unit frame health bars while units have configured player-cast buffs. The tint is rendered by secure 12.1 Aura Slots, preserving the feature in combat without exposing restricted aura state to addon Lua. Includes per-buff settings for Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, plus custom spell IDs that add more buff profiles alongside the built-ins. Each buff can be enabled, colored, assigned to player, target, party, or ElvUI raid frame sizes, and restricted to relevant player specializations independently.
 
 **Buff Health Color — EllesmereUI**
 EllesmereUI Raid Frames already provides this functionality natively. In its Buff Manager, create an indicator and select **Health Bar Color** to configure spell assignment, ownership, color, and opacity. MathWroQOL deliberately does not install a second competing recolor runtime.
@@ -69,7 +69,7 @@ Registers CooldownManagerCentered's icon viewers with Masque so their icons can 
 ### Debug
 
 **Buff Health Color Diagnostics**
-Adds a Debug section to the options panel with quick buttons for Target, Party 1, Raid 1, and Player. Each button prints Buff Health Color diagnostic details to chat, including whether the feature is enabled, whether the configured buff is found from the player, whether the current spec matches the buff profile, and which ElvUI unit frames are hooked. The same diagnostic is available with `/mqolbuffdebug <unit>`.
+Adds a Debug section to the options panel with quick buttons for Target, Party 1, Raid 1, and Player. Each button prints Buff Health Color diagnostic details to chat, including Aura Container availability, active profiles, configured Aura Slot counts, specialization, and matching ElvUI unit frames. Aura presence is intentionally reported as engine-managed. The same diagnostic is available with `/mqolbuffdebug <unit>`.
 
 ## Slash Commands
 
