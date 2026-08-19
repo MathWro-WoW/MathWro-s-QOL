@@ -794,10 +794,10 @@ local function BuildCombatLogPanel()
         sc,
         rootAnchor,
         "Combat Logging",
-        "Automatically start combat logging when entering selected instance types. Stops on exit. If you manually stop logging mid-instance, it stays off until the next instance."
+        "Automatically start combat logging when entering selected instance types. Stops when entering unselected types or leaving instances. If you manually stop logging mid-instance, it stays off until you leave all instances."
     )
 
-    local clDungeonCB = MakeCheckbox(content, "Dungeon (includes Mythic+)", 0, 0,
+    local clDungeonCB = MakeCheckbox(content, "Dungeon", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.dungeon end,
         function(val)
             if not addon.db.combatLog then addon.db.combatLog = {} end
@@ -817,6 +817,16 @@ local function BuildCombatLogPanel()
     clRaidCB:ClearAllPoints()
     clRaidCB:SetPoint("TOPLEFT", clDungeonCB, "TOPLEFT", 220, 0)
 
+    local clMythicPlusCB = MakeCheckbox(content, "Mythic+", 0, 0,
+        function() return addon.db.combatLog and addon.db.combatLog.mythicPlus end,
+        function(val)
+            if not addon.db.combatLog then addon.db.combatLog = {} end
+            addon.db.combatLog.mythicPlus = val
+        end
+    )
+    clMythicPlusCB:ClearAllPoints()
+    clMythicPlusCB:SetPoint("TOPLEFT", clDungeonCB, "BOTTOMLEFT", 0, -4)
+
     local clScenarioCB = MakeCheckbox(content, "Scenario", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.scenario end,
         function(val)
@@ -825,7 +835,7 @@ local function BuildCombatLogPanel()
         end
     )
     clScenarioCB:ClearAllPoints()
-    clScenarioCB:SetPoint("TOPLEFT", clDungeonCB, "BOTTOMLEFT", 0, -4)
+    clScenarioCB:SetPoint("TOPLEFT", clMythicPlusCB, "TOPLEFT", 220, 0)
 
     local clPvpCB = MakeCheckbox(content, "Battleground", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.pvp end,
@@ -835,7 +845,7 @@ local function BuildCombatLogPanel()
         end
     )
     clPvpCB:ClearAllPoints()
-    clPvpCB:SetPoint("TOPLEFT", clScenarioCB, "TOPLEFT", 220, 0)
+    clPvpCB:SetPoint("TOPLEFT", clMythicPlusCB, "BOTTOMLEFT", 0, -4)
 
     local clArenaCB = MakeCheckbox(content, "Arena", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.arena end,
@@ -845,7 +855,7 @@ local function BuildCombatLogPanel()
         end
     )
     clArenaCB:ClearAllPoints()
-    clArenaCB:SetPoint("TOPLEFT", clScenarioCB, "BOTTOMLEFT", 0, -4)
+    clArenaCB:SetPoint("TOPLEFT", clPvpCB, "TOPLEFT", 220, 0)
 
     local clMaxLevelCB = MakeCheckbox(content, "Only at max level", 0, 0,
         function() return addon.db.combatLog and addon.db.combatLog.maxLevelOnly end,

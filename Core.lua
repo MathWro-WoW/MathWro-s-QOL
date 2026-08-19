@@ -140,6 +140,7 @@ local defaults = {
     },
     combatLog = {
         dungeon      = false,
+        mythicPlus   = false,
         raid         = false,
         scenario     = false,
         pvp          = false,

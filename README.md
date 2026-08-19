@@ -27,7 +27,7 @@ Automatically pre-enables selected filters each time you open the Auction House.
 ### Combat Logging
 
 **Automatic Combat Logging**
-Automatically starts and stops combat logging based on instance type. Supports dungeons, raids, scenarios, PvP, and arenas with independent toggles. Optional max-level-only gate to skip logging while levelling. Respects manual stop — if you disable logging mid-instance, the addon will not re-enable it until you leave.
+Automatically starts combat logging only while you are in a selected instance type: dungeons, Mythic+ dungeons, raids, scenarios, PvP, and arenas each have independent toggles. When you transition to an unselected type or leave instances, the addon stops only logging it started. Optional max-level-only gate also stops addon-started logging while levelling. Respects manual stop — if you disable logging mid-instance, the addon will not re-enable it until you leave all instances.
 
 ### Combat Tracker
 

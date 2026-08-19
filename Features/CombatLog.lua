@@ -14,6 +14,23 @@ local instanceTypeToKey = {
     arena    = "arena",
 }
 
+local MYTHIC_KEYSTONE_DIFFICULTY_ID = 8
+
+local function getContentKey(instanceType)
+    if instanceType == "party" and select(3, GetInstanceInfo()) == MYTHIC_KEYSTONE_DIFFICULTY_ID then
+        return "mythicPlus"
+    end
+    return instanceTypeToKey[instanceType]
+end
+
+local function stopCombatLogging()
+    if startedByAddon and LoggingCombat() then
+        LoggingCombat(false)
+        print("[MathWro QOL] Combat logging stopped.")
+    end
+    startedByAddon = false
+end
+
 local function onZoneTransition()
     local db = addon.db and addon.db.combatLog
     if not db then return end
@@ -21,11 +38,7 @@ local function onZoneTransition()
     local inInstance, instanceType = IsInInstance()
 
     if not inInstance then
-        if startedByAddon and LoggingCombat() then
-            LoggingCombat(false)
-            print("[MathWro QOL] Combat logging stopped.")
-        end
-        startedByAddon = false
+        stopCombatLogging()
         manuallyDisabled = false
         return
     end
@@ -35,13 +48,17 @@ local function onZoneTransition()
         manuallyDisabled = true
     end
 
-    -- Skip if max-level-only is enabled and the player hasn't reached cap
-    if db.maxLevelOnly and UnitLevel("player") < GetMaxLevelForPlayerExpansion() then
+    local key = getContentKey(instanceType)
+    local atRequiredLevel = not db.maxLevelOnly
+        or UnitLevel("player") >= GetMaxLevelForPlayerExpansion()
+    local shouldLogHere = key and db[key] and atRequiredLevel
+
+    if not shouldLogHere then
+        stopCombatLogging()
         return
     end
 
-    local key = instanceTypeToKey[instanceType]
-    if key and db[key] and not manuallyDisabled and not LoggingCombat() then
+    if not manuallyDisabled and not LoggingCombat() then
         LoggingCombat(true)
         startedByAddon = true
         print("[MathWro QOL] Combat logging started.")
