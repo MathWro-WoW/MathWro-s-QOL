@@ -537,7 +537,19 @@ local function AttachToLibEditModeSelection(frame, selection)
 end
 
 local ellesmereUnlockHooked = false
+local UNLOCK_MOVER_SCAN_BATCH_SIZE = 100
 local unlockMoverScanPending = false
+local unlockMoverScanFrame
+local unlockMoverScanGeneration = 0
+local unlockMoverRescanRequested = false
+
+local function StopUnlockMoverScan()
+    unlockMoverScanGeneration = unlockMoverScanGeneration + 1
+    unlockMoverScanPending = false
+    unlockMoverScanFrame = nil
+    unlockMoverRescanRequested = false
+end
+local QueueUnlockMoverScan
 
 local function HookUnlockMover(mover)
     if not mover or mover._mqolUnlockNudgeHooked then return end
@@ -566,32 +578,60 @@ local function HookUnlockMover(mover)
     end)
 end
 
-local function ScanUnlockMovers()
-    if not IsEllesmereNudgeEnabled() then return end
+local function ScanUnlockMovers(generation)
+    if generation ~= unlockMoverScanGeneration then return end
+    if not IsEllesmereNudgeEnabled() then
+        StopUnlockMoverScan()
+        return
+    end
     if not EllesmereUI or not EllesmereUI.IsUnlockModeActive
         or not EllesmereUI.IsUnlockModeActive()
     then
+        StopUnlockMoverScan()
         return
     end
 
-    local frame = EnumerateFrames()
-    while frame do
+    local frame = unlockMoverScanFrame or EnumerateFrames()
+    local scanned = 0
+    while frame and scanned < UNLOCK_MOVER_SCAN_BATCH_SIZE do
+        local nextFrame = EnumerateFrames(frame)
         if frame.IsObjectType and frame:IsObjectType("Button")
             and frame._barKey and frame._bg and frame._brd
         then
             HookUnlockMover(frame)
         end
-        frame = EnumerateFrames(frame)
+        frame = nextFrame
+        scanned = scanned + 1
+    end
+
+    unlockMoverScanFrame = frame
+    if frame then
+        C_Timer.After(0, function()
+            ScanUnlockMovers(generation)
+        end)
+    else
+        unlockMoverScanPending = false
+        unlockMoverScanFrame = nil
+        if unlockMoverRescanRequested then
+            unlockMoverRescanRequested = false
+            QueueUnlockMoverScan()
+        end
     end
 end
 
-local function QueueUnlockMoverScan()
-    if unlockMoverScanPending then return end
+QueueUnlockMoverScan = function()
     if not IsEllesmereNudgeEnabled() then return end
+    if unlockMoverScanPending then
+        unlockMoverRescanRequested = true
+        return
+    end
+
+    unlockMoverScanGeneration = unlockMoverScanGeneration + 1
+    local generation = unlockMoverScanGeneration
     unlockMoverScanPending = true
+    unlockMoverScanFrame = nil
     C_Timer.After(0, function()
-        unlockMoverScanPending = false
-        ScanUnlockMovers()
+        ScanUnlockMovers(generation)
     end)
 end
 
@@ -603,8 +643,11 @@ local function InstallEllesmereUnlockHooks()
     EllesmereUI:RegisterUnlockModeListener("MathWroQOL_EditModeNudge", function(active)
         if active then
             QueueUnlockMoverScan()
-        elseif selectedEllesmereMover then
-            DetachOverlay()
+        else
+            StopUnlockMoverScan()
+            if selectedEllesmereMover then
+                DetachOverlay()
+            end
         end
     end)
 
@@ -688,6 +731,10 @@ function EditModeNudge:Apply()
 
     if blizzardEnabled or ellesmereEnabled then
         InstallHooks()
+    end
+
+    if not ellesmereEnabled then
+        StopUnlockMoverScan()
     end
 
     local selectedProviderDisabled = (selectedEllesmereMover and not ellesmereEnabled)
