@@ -147,6 +147,13 @@ local defaults = {
         arena        = false,
         maxLevelOnly = false,
     },
+    cameraDistance = {
+        enabled = false,
+    },
+    spellQueueWindow = {
+        enabled = false,
+        value = 400,
+    },
     editModeNudge = {
         enabled = false,
         ellesmereEnabled = false,

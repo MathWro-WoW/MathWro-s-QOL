@@ -11,7 +11,7 @@ Read `docs/ARCHITECTURE.md` before writing or modifying any code. It contains th
 
 ### API Documentation
 
-Agents should consult the WoW API documentation which is available via the MCP Server "documcp" by using the MCP's provided tools and referencing the source called "WoW Addon API". This documentation includes detailed information on all available functions, events, and constants that can be used in addon development.
+Use Context7 (`npx ctx7@latest library` followed by `npx ctx7@latest docs`) to retrieve current WoW API documentation before making API-dependent changes.
 
 ---
 
@@ -34,15 +34,16 @@ There is **no build step, linter, or automated test runner**. Validate manually:
 | `EditModeNudge.lua` | Test native Edit Mode/LibEditMode and EllesmereUI Unlock Mode independently |
 | `CombatTracker.lua` | Enable in `/mqol`; enter combat; verify icons and cooldowns update |
 | `Config.lua` | Run `/mqol`; verify provider-specific submenus, disabled dependency states, controls, and first-open layout |
+| `CVarSettings.lua` | Run `/mqol`; verify the Camera Distance and Spell Queue Window controls, the client-reported Spell Queue Window default, and that enabled values are restored after `/reload` |
 
 ---
 
 ## Releases
-GitHub Actions only. The current minor release line is `v1.9.0`.
+GitHub Actions only. Use Semantic Versioning: additive features increment MINOR; fixes increment PATCH. Create and push an annotated tag:
 
 ```bash
-git tag v1.9.0
-git push origin v1.9.0
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
 ```
 
 Triggers `.github/workflows/release.yml` → `BigWigsMods/packager@v2`.

@@ -29,6 +29,14 @@ Automatically pre-enables selected filters each time you open the Auction House.
 **Automatic Combat Logging**
 Automatically starts combat logging only while you are in a selected instance type: dungeons, Mythic+ dungeons, raids, scenarios, PvP, and arenas each have independent toggles. When you transition to an unselected type or leave instances, the addon stops only logging it started. Optional max-level-only gate also stops addon-started logging while levelling. Respects manual stop — if you disable logging mid-instance, the addon will not re-enable it until you leave all instances.
 
+### CVars and Settings
+
+**Camera Distance** *(disabled by default)*
+Checks `cameraDistanceMaxZoomFactor` each login and restores the Retail maximum of 2.6 when enabled.
+
+**Spell Queue Window** *(disabled by default)*
+Sets a configurable 0–400ms queue window on login. The options panel shows the current client-reported WoW default alongside the selected value; the initial configured value is 400ms.
+
 ### Combat Tracker
 
 **Racials, Trinkets & Consumables**

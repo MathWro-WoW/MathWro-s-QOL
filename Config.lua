@@ -872,6 +872,96 @@ local function BuildCombatLogPanel()
     return panel
 end
 
+local function BuildCVarsAndSettingsPanel()
+    local panel = CreateFrame("Frame")
+    panel.name = "CVars and Settings"
+
+    local sc = MakePanelScaffold(panel, "CVars and Settings", "MathWroQOL_CVarsAndSettingsScroll")
+
+    local rootAnchor = CreateFrame("Frame", nil, sc)
+    rootAnchor:SetSize(1, 1)
+    rootAnchor:SetPoint("TOPLEFT", sc, "TOPLEFT", 8, -12)
+
+    local cameraDistanceCard, cameraDistanceContent = MakeCard(
+        sc,
+        rootAnchor,
+        "Camera Distance",
+        "Checks cameraDistanceMaxZoomFactor on login and restores its maximum value when enabled."
+    )
+
+    local cameraDistanceCB = MakeCheckbox(cameraDistanceContent, "Enforce maximum camera distance", 0, 0,
+        function() return addon.db.cameraDistance and addon.db.cameraDistance.enabled end,
+        function(val)
+            if not addon.db.cameraDistance then addon.db.cameraDistance = {} end
+            addon.db.cameraDistance.enabled = val
+            addon:NotifyFeature("cameraDistance")
+        end
+    )
+    cameraDistanceCB:ClearAllPoints()
+    cameraDistanceCB:SetPoint("TOPLEFT", cameraDistanceContent, "TOPLEFT", 12, -2)
+    cameraDistanceCard:SetBottomWidget(cameraDistanceCB, 12)
+
+    local spellQueueCard, spellQueueContent = MakeCard(
+        sc,
+        cameraDistanceCard,
+        "Spell Queue Window",
+        "Controls how early your next spell can queue. Lower values feel more responsive but require lower latency."
+    )
+
+    local spellQueueCB = MakeCheckbox(spellQueueContent, "Enforce spell queue window", 0, 0,
+        function() return addon.db.spellQueueWindow and addon.db.spellQueueWindow.enabled end,
+        function(val)
+            if not addon.db.spellQueueWindow then addon.db.spellQueueWindow = {} end
+            addon.db.spellQueueWindow.enabled = val
+            addon:NotifyFeature("spellQueueWindow")
+        end
+    )
+    spellQueueCB:ClearAllPoints()
+    spellQueueCB:SetPoint("TOPLEFT", spellQueueContent, "TOPLEFT", 12, -2)
+
+    local spellQueueControls = CreateFrame("Frame", nil, spellQueueContent)
+    spellQueueControls:SetSize(340, 80)
+    spellQueueControls:SetPoint("TOPLEFT", spellQueueCB, "BOTTOMLEFT", 20, -2)
+
+    local spellQueueDefaultLabel = spellQueueControls:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    spellQueueDefaultLabel:SetPoint("TOPLEFT", spellQueueControls, "TOPLEFT", 0, 0)
+
+    local spellQueueSlider = MakeSliderWithInput(spellQueueControls, "Queue window (ms)", 0, 400,
+        function() return (addon.db.spellQueueWindow and addon.db.spellQueueWindow.value) or 400 end,
+        function(value)
+            if not addon.db.spellQueueWindow then addon.db.spellQueueWindow = {} end
+            addon.db.spellQueueWindow.value = value
+            addon:NotifyFeature("spellQueueWindow")
+        end
+    )
+    spellQueueSlider:SetPoint("TOPLEFT", spellQueueDefaultLabel, "BOTTOMLEFT", 0, -6)
+
+    spellQueueCard:SetBottomWidget(spellQueueControls, 12)
+
+    local function updateSpellQueueControls()
+        SetChildrenEnabled(spellQueueControls, addon.db.spellQueueWindow and addon.db.spellQueueWindow.enabled == true)
+    end
+    spellQueueCB:HookScript("OnClick", updateSpellQueueControls)
+
+    local function refreshControls()
+        local cameraDistance = addon.db.cameraDistance or {}
+        cameraDistanceCB:SetChecked(cameraDistance.enabled == true)
+
+        local spellQueueWindow = addon.db.spellQueueWindow or {}
+        spellQueueCB:SetChecked(spellQueueWindow.enabled == true)
+        spellQueueSlider:Refresh()
+
+        local _, defaultValue = C_CVar.GetCVarInfo("SpellQueueWindow")
+        spellQueueDefaultLabel:SetFormattedText("WoW default: %s ms", defaultValue or "Unknown")
+        updateSpellQueueControls()
+    end
+
+    panel:HookScript("OnShow", refreshControls)
+    refreshControls()
+
+    return panel
+end
+
 local function BuildUIIntegrationsPanel(provider)
     local panel = CreateFrame("Frame")
     panel.name = provider == "elvui" and "ElvUI" or "EllesmereUI"
@@ -3014,6 +3104,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
     local parentPanel = BuildParentPanel()
     local generalPanel = BuildGeneralPanel()
     local combatLogPanel = BuildCombatLogPanel()
+    local cvarsAndSettingsPanel = BuildCVarsAndSettingsPanel()
     local combatTrackerPanel = BuildCombatTrackerPanel()
     local elvuiPanel = BuildUIIntegrationsPanel("elvui")
     local ellesmereUIPanel = BuildUIIntegrationsPanel("ellesmere")
@@ -3024,6 +3115,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         local parentCat = Settings.RegisterCanvasLayoutCategory(parentPanel, parentPanel.name)
         local generalCat = Settings.RegisterCanvasLayoutSubcategory(parentCat, generalPanel, generalPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatLogPanel, combatLogPanel.name)
+        Settings.RegisterCanvasLayoutSubcategory(parentCat, cvarsAndSettingsPanel, cvarsAndSettingsPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, combatTrackerPanel, combatTrackerPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, elvuiPanel, elvuiPanel.name)
         Settings.RegisterCanvasLayoutSubcategory(parentCat, ellesmereUIPanel, ellesmereUIPanel.name)
@@ -3040,6 +3132,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         InterfaceOptions_AddCategory(parentPanel)
         InterfaceOptions_AddCategory(generalPanel, parentPanel)
         InterfaceOptions_AddCategory(combatLogPanel, parentPanel)
+        InterfaceOptions_AddCategory(cvarsAndSettingsPanel, parentPanel)
         InterfaceOptions_AddCategory(combatTrackerPanel, parentPanel)
         InterfaceOptions_AddCategory(elvuiPanel, parentPanel)
         InterfaceOptions_AddCategory(ellesmereUIPanel, parentPanel)

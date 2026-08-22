@@ -28,6 +28,7 @@ Features\CDMButton.lua
 Features\CMCMasque.lua
 Features\AuctionFilter.lua
 Features\CombatLog.lua
+Features\CVarSettings.lua
 Features\EditModeNudge.lua
 Features\CombatTracker.lua
 Features\CombatTracker_Racials.lua
