@@ -35,7 +35,7 @@ Automatically starts combat logging only while you are in a selected instance ty
 Checks `cameraDistanceMaxZoomFactor` each login and restores the Retail maximum of 2.6 when enabled.
 
 **Spell Queue Window** *(disabled by default)*
-Sets a configurable 0–400ms queue window on login. The options panel shows the current client-reported WoW default alongside the selected value; the initial configured value is 400ms.
+Never changes your existing queue window until you explicitly enable it. First activation captures your current value unchanged; use the 0–400ms slider only when you want to enforce a different value on later logins. The options panel shows the client-reported WoW default alongside the selected value.
 
 ### Combat Tracker
 

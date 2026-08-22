@@ -905,14 +905,22 @@ local function BuildCVarsAndSettingsPanel()
         sc,
         cameraDistanceCard,
         "Spell Queue Window",
-        "Controls how early your next spell can queue. Lower values feel more responsive but require lower latency."
+        "First activation preserves your current queue window. Change the value only when you want to enforce a different setting."
     )
+
+    local function getCurrentSpellQueueWindow()
+        return tonumber(C_CVar.GetCVar("SpellQueueWindow")) or 400
+    end
 
     local spellQueueCB = MakeCheckbox(spellQueueContent, "Enforce spell queue window", 0, 0,
         function() return addon.db.spellQueueWindow and addon.db.spellQueueWindow.enabled end,
         function(val)
             if not addon.db.spellQueueWindow then addon.db.spellQueueWindow = {} end
-            addon.db.spellQueueWindow.enabled = val
+            local db = addon.db.spellQueueWindow
+            if val and db.value == nil then
+                db.value = getCurrentSpellQueueWindow()
+            end
+            db.enabled = val
             addon:NotifyFeature("spellQueueWindow")
         end
     )
@@ -927,7 +935,10 @@ local function BuildCVarsAndSettingsPanel()
     spellQueueDefaultLabel:SetPoint("TOPLEFT", spellQueueControls, "TOPLEFT", 0, 0)
 
     local spellQueueSlider = MakeSliderWithInput(spellQueueControls, "Queue window (ms)", 0, 400,
-        function() return (addon.db.spellQueueWindow and addon.db.spellQueueWindow.value) or 400 end,
+        function()
+            local db = addon.db.spellQueueWindow
+            return (db and db.value) or getCurrentSpellQueueWindow()
+        end,
         function(value)
             if not addon.db.spellQueueWindow then addon.db.spellQueueWindow = {} end
             addon.db.spellQueueWindow.value = value

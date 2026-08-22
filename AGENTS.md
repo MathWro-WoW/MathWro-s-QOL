@@ -34,7 +34,7 @@ There is **no build step, linter, or automated test runner**. Validate manually:
 | `EditModeNudge.lua` | Test native Edit Mode/LibEditMode and EllesmereUI Unlock Mode independently |
 | `CombatTracker.lua` | Enable in `/mqol`; enter combat; verify icons and cooldowns update |
 | `Config.lua` | Run `/mqol`; verify provider-specific submenus, disabled dependency states, controls, and first-open layout |
-| `CVarSettings.lua` | Run `/mqol`; verify the Camera Distance and Spell Queue Window controls, the client-reported Spell Queue Window default, and that enabled values are restored after `/reload` |
+| `CVarSettings.lua` | Run `/mqol`; confirm Spell Queue Window leaves the current CVar unchanged until explicitly enabled, first activation captures that value without writing it, and only that captured or subsequently user-selected value is restored after `/reload` |
 
 ---
 

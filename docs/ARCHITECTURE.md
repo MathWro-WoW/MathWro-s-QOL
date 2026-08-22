@@ -126,7 +126,7 @@ Four surfaces to wire:
 | Auction Filter | `AuctionFilter.lua` | `auctionFilter` | Pre-enables AH filters on open |
 | Combat Log | `CombatLog.lua` | `combatLog` | Auto-starts/stops combat logging by instance type and level cap |
 | Camera Distance | `CVarSettings.lua` | `cameraDistance` | When enabled, checks `cameraDistanceMaxZoomFactor` on each login and restores its maximum (`2.6`) value |
-| Spell Queue Window | `CVarSettings.lua` | `spellQueueWindow` | When enabled, restores the configured queue window on each login; the UI shows the client-reported WoW default |
+| Spell Queue Window | `CVarSettings.lua` | `spellQueueWindow` | Never writes a value until explicitly enabled; first activation captures the current queue window, and later logins restore that captured or subsequently user-selected value |
 | Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Provider-split arrow buttons + coordinate display: `enabled` covers native Edit Mode/LibEditMode; `ellesmereEnabled` covers EllesmereUI Unlock Mode and is disabled by default |
 | Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring through 12.1 secure Aura Slots for configured player-cast buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs. Aura presence and slot visibility stay engine-managed; each profile retains frame, color, and specialization filters. EllesmereUI Raid Frames already provides equivalent Health Bar Color indicators in its Buff Manager, so MathWroQOL does not duplicate that runtime |
 | Combat Tracker | `CombatTracker.lua` + 3 section files | `combatTracker` | Cooldown icon display system (racials, trinkets, consumables) |

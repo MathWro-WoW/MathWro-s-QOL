@@ -152,7 +152,6 @@ local defaults = {
     },
     spellQueueWindow = {
         enabled = false,
-        value = 400,
     },
     editModeNudge = {
         enabled = false,
