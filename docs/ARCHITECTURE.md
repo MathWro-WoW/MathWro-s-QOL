@@ -1,7 +1,7 @@
 # MathWroQOL — Architecture Reference
 
 Canonical reference for architecture, code style, and WoW API patterns.
-All AI instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`) defer to this document.
+`AGENTS.md` is the repository instruction entry point and defers to this document.
 
 ---
 

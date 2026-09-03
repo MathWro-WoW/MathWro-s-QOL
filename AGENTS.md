@@ -16,11 +16,22 @@ Use Context7 (`npx ctx7@latest library` followed by `npx ctx7@latest docs`) to r
 ---
 
 ## Build / Lint / Test
-There is **no build step, linter, or automated test runner**. Validate manually:
+
+There is no build step or linter. Run the Lua 5.1 smoke and syntax checks:
+
+```bash
+lua tests/CombatTracker_Cooldowns_smoke.lua
+lua tests/CombatLog_smoke.lua
+lua tests/BuffHealthColor_smoke.lua
+lua tests/EditModeNudge_smoke.lua
+luac -p Features/*.lua tests/*.lua
+```
+
+Then validate in-game:
 
 1. Load the addon in WoW Retail (`_retail_`)
-2. Run `/reload` in-game after each change
-3. Check for Lua errors in the default WoW error frame, or via `!BugGrabber` / `BugSack`
+2. Run `/reload` after each change
+3. Check the default error frame or `!BugGrabber` / `BugSack`
 
 ### Per-feature Validation
 | Feature | How to test |
@@ -32,7 +43,7 @@ There is **no build step, linter, or automated test runner**. Validate manually:
 | `VehicleBar.lua` | Test selected bars with ElvUI and EllesmereUI Action Bars independently when available |
 | `BuffHealthColor.lua` | With ElvUI, test configured spell IDs on player, target, party, and raid frames; verify restricted aura updates produce no Lua errors |
 | `EditModeNudge.lua` | Test native Edit Mode/LibEditMode and EllesmereUI Unlock Mode independently |
-| `CombatTracker.lua` | Enable in `/mqol`; enter combat; verify icons and cooldowns update |
+| `CombatTracker.lua` | Enable in `/mqol`; enter combat; trigger a racial, Healthstone or potion, and on-use trinket; verify each cooldown starts immediately without restricted-value errors |
 | `Config.lua` | Run `/mqol`; verify provider-specific submenus, disabled dependency states, controls, and first-open layout |
 | `CVarSettings.lua` | Run `/mqol`; confirm Spell Queue Window leaves the current CVar unchanged until explicitly enabled, first activation captures that value without writing it, and only that captured or subsequently user-selected value is restored after `/reload` |
 
