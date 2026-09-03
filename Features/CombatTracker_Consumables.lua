@@ -50,6 +50,13 @@ local HEALTHSTONE_CD_SPELL = 6262
 -- Fallback icon shown when hideIfMissing=false and item is not in bags
 local FALLBACK_ICON = 134400  -- classic potion flask icon
 
+local function getItemSpell(itemID)
+    if C_Item and C_Item.GetItemSpell then
+        return C_Item.GetItemSpell(itemID)
+    end
+    return GetItemSpell(itemID)
+end
+
 -- Builds the default display order from enabled categories + custom items.
 -- Used to populate itemOrder when empty and by Config.lua to reset order.
 local function buildDefaultOrder(frameDb)
@@ -191,11 +198,16 @@ function consumables:ScanBags()
                     local _, _, _, _, _, _, _, _, _, itemIcon = GetItemInfo(id)
                     f = { icon = itemIcon or FALLBACK_ICON, count = 0 }
                 end
+                local _, spellID = getItemSpell(id)
+                if tracked[id] == "healthstone" then
+                    spellID = HEALTHSTONE_CD_SPELL
+                end
                 table.insert(active, {
                     itemID   = id,
                     icon     = f.icon,
                     count    = f.count,
                     category = tracked[id],
+                    spellID  = spellID,
                 })
                 added[id] = true
             end
@@ -235,6 +247,7 @@ function consumables:ScanBags()
             btn.icon:SetTexture(entry.icon)
             btn._itemID   = entry.itemID
             btn._category = entry.category
+            btn._spellID  = entry.spellID
             if btn.countText then
                 local count   = entry.count or 0
                 local enabled = addon.db.combatTracker.frames.consumables.stackCountEnabled ~= false
@@ -249,6 +262,7 @@ function consumables:ScanBags()
         else
             btn._itemID   = nil
             btn._category = nil
+            btn._spellID  = nil
             if btn.countText then btn.countText:Hide() end
             btn:Hide()
         end
@@ -264,19 +278,11 @@ function consumables:RebuildIcons()
     self:ScanBags()
 end
 
--- Refreshes cooldown overlays without re-scanning bags.
--- Healthstone uses the shared conjure cooldown spell; others use GetItemCooldown.
+-- Refreshes cooldown overlays through engine-owned duration objects.
 function consumables:UpdateCooldowns()
     for _, btn in ipairs(self.buttons) do
         if btn:IsShown() and btn._itemID then
-            -- Use C_Item.GetItemCooldown for all consumables including healthstone.
-            -- C_Spell.GetSpellCooldown(HEALTHSTONE_CD_SPELL) returns SecretWhenSpellCooldownRestricted
-            -- values regardless of execution context; the item API avoids this.
-            -- (AllowedWhenUntainted — safe because this runs inside C_Timer.After.)
-            local s, d, enable = C_Item.GetItemCooldown(btn._itemID)
-            local start    = enable and (s or 0) or 0
-            local duration = enable and (d or 0) or 0
-            CT.UpdateButtonCooldown(btn, start, duration)
+            CT.UpdateButtonCooldownFromSpell(btn, btn._spellID)
         end
     end
 end

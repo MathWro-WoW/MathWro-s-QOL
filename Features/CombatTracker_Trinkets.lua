@@ -51,21 +51,26 @@ function trinkets:RebuildIcons()
         return
     end
 
-    local active = {}  -- { slotID, isOnUse, icon }
+    local active = {}  -- { slotID, isOnUse, spellID, icon }
     for _, slotID in ipairs(TRINKET_SLOTS) do
         local itemID = GetInventoryItemID("player", slotID)
         if itemID then
-            local spellName = getItemSpell(itemID)
-            local isOnUse   = spellName ~= nil
-            local icon      = GetInventoryItemTexture("player", slotID)
-            local isCached  = isItemDataCached(itemID)
+            local spellName, spellID = getItemSpell(itemID)
+            local isOnUse            = spellName ~= nil
+            local icon               = GetInventoryItemTexture("player", slotID)
+            local isCached           = isItemDataCached(itemID)
 
             if not icon or not isCached then
                 requestItemData(itemID)
             end
 
             if icon and (not frameDb.onUseOnly or isOnUse) then
-                table.insert(active, { slotID = slotID, isOnUse = isOnUse, icon = icon })
+                table.insert(active, {
+                    slotID = slotID,
+                    isOnUse = isOnUse,
+                    spellID = spellID,
+                    icon = icon,
+                })
             end
         end
     end
@@ -103,10 +108,12 @@ function trinkets:RebuildIcons()
             btn.icon:SetTexture(entry.icon)
             btn._slotID  = entry.slotID
             btn._isOnUse = entry.isOnUse
+            btn._spellID = entry.spellID
             btn:Show()
         else
             btn._slotID  = nil
             btn._isOnUse = nil
+            btn._spellID = nil
             btn:Hide()
         end
     end
@@ -117,22 +124,13 @@ function trinkets:RebuildIcons()
     CT:LayoutSection(CT:GetHostKey("trinkets"))
 end
 
--- For on-use trinkets: query inventory slot cooldown.
--- For passive trinkets: always clear the cooldown display.
+-- Refreshes on-use cooldowns through engine-owned duration objects. Passive
+-- trinkets have no spell ID and are cleared by the shared updater.
 function trinkets:UpdateCooldowns()
     for _, btn in ipairs(self.buttons) do
         if btn:IsShown() and btn._slotID then
-            if btn._isOnUse then
-                -- GetInventoryItemCooldown returns start, duration, enable
-                local start, duration, enable = GetInventoryItemCooldown("player", btn._slotID)
-                if enable then
-                    CT.UpdateButtonCooldown(btn, start, duration)
-                else
-                    CT.UpdateButtonCooldown(btn, 0, 0)
-                end
-            else
-                CT.UpdateButtonCooldown(btn, 0, 0)
-            end
+            local spellID = btn._isOnUse and btn._spellID or nil
+            CT.UpdateButtonCooldownFromSpell(btn, spellID)
         end
     end
 end

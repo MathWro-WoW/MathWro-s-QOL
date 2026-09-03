@@ -90,7 +90,7 @@ Controls should mutate `addon.db.<feature>` then call `addon:NotifyFeature("<nam
 - `RegisterStateDriver` — last call wins; use an `applying` guard flag when your hook calls it
 - ElvUI has **two** fade systems: per-bar `bar.mouseover` and global `bar.inheritGlobalFade` via `AB.fadeParent`. Vehicle logic must handle both.
 - `GetInventoryItemID()` is unreliable at `PLAYER_LOGIN` — use `PLAYER_ENTERING_WORLD` instead
-- `C_Spell.GetSpellCooldown()` can return `SecretWhenSpellCooldownRestricted` — use `pcall` or prefer `C_Item.GetItemCooldown()` for items
+- Combat cooldown timing from `C_Spell`, `C_Item`, and inventory APIs may be restricted in 12.1. Pass `C_Spell.GetSpellCooldownDuration(spellID, true)` directly to `Cooldown:SetCooldownFromDurationObject(duration, true)`. Never branch on `duration:IsZero()`; use only the `NeverSecret` `SpellCooldownInfo.isActive` / `isOnGCD` fields for styling.
 
 ---
 

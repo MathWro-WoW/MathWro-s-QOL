@@ -151,35 +151,11 @@ function racials:RebuildIcons()
     CT:LayoutSection(CT:GetHostKey("racials"))
 end
 
--- Refreshes cooldown state for all active buttons
+-- Refreshes cooldown state through the engine-owned duration object.
 function racials:UpdateCooldowns()
     for _, btn in ipairs(self.buttons) do
         if btn:IsShown() and btn._spellID then
-            local info     = C_Spell.GetSpellCooldown(btn._spellID)
-            local start    = info and info.startTime or 0
-            local duration = info and info.duration  or 0
-            local modRate  = info and info.modRate
-            local isOnGCD  = info and info.isOnGCD
-            CT.UpdateButtonCooldown(btn, start, duration, modRate, isOnGCD)
-        end
-    end
-end
-
--- Called when a player spell cast succeeds. Uses clean values (GetTime() +
--- GetSpellBaseCooldown) to set the cooldown frame, bypassing the
--- SecretWhenSpellCooldownRestricted restriction on C_Spell.GetSpellCooldown.
-function racials:OnSpellCast(spellID)
-    for _, btn in ipairs(self.buttons) do
-        if btn._spellID == spellID then
-            local cooldownMS  = GetSpellBaseCooldown(spellID)
-            local cooldownSec = cooldownMS and (cooldownMS / 1000) or 0
-            if cooldownSec > 1.5 then
-                btn.cooldown:SetCooldown(GetTime(), cooldownSec)
-                if addon.db.combatTracker.frames.racials.desaturateOnCD then
-                    btn.icon:SetDesaturated(true)
-                end
-            end
-            break
+            CT.UpdateButtonCooldownFromSpell(btn, btn._spellID)
         end
     end
 end
@@ -204,19 +180,15 @@ function racials:Initialize()
 
     self.eventFrame = CreateFrame("Frame")
     self.eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-    self.eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     self.eventFrame:RegisterEvent("UNIT_ENTERED_VEHICLE")
     self.eventFrame:RegisterEvent("UNIT_EXITED_VEHICLE")
 
-    self.eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
+    self.eventFrame:SetScript("OnEvent", function(_, event, unit)
         local db = addon.db.combatTracker
         local frameDb = db and db.frames and db.frames.racials
 
         if event == "SPELL_UPDATE_COOLDOWN" then
             if not db.enabled or not frameDb.enabled then return end
-            -- SPELL_UPDATE_COOLDOWN is only used to CLEAR cooldown frames when a
-            -- racial expires (start = 0 is a clean zero, always comparable).
-            -- Active cooldowns are SET by UNIT_SPELLCAST_SUCCEEDED with clean data.
             if not self._cdPending then
                 self._cdPending = true
                 C_Timer.After(0, function()
@@ -224,12 +196,6 @@ function racials:Initialize()
                     self:UpdateCooldowns()
                 end)
             end
-        elseif event == "UNIT_SPELLCAST_SUCCEEDED" and unit == "player" then
-            if not db.enabled or not frameDb.enabled then return end
-            -- Use clean values: GetTime() for start, spell info for base duration.
-            -- C_Spell.GetSpellCooldown returns SecretWhenSpellCooldownRestricted values
-            -- so we avoid it here and derive the data from untainted sources.
-            self:OnSpellCast(spellID)
         elseif event == "UNIT_ENTERED_VEHICLE" and unit == "player" then
             -- Suppress racial frame while in vehicle
             if CT.frames["racials"] then CT.frames["racials"]:Hide() end

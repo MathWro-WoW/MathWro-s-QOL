@@ -99,32 +99,23 @@ end
 
 -- ── Shared cooldown updater ───────────────────────────────────────────────────
 
--- Sections call this to update a button's cooldown frame.
--- start/duration from C_Spell.GetSpellCooldown are SecretWhenSpellCooldownRestricted
--- and cannot be compared when the spell is actively on cooldown. pcall catches
--- that; the on-cooldown SET path is handled per-section via UNIT_SPELLCAST_SUCCEEDED
--- with clean data. The off-cooldown CLEAR path (start = 0, a plain zero) is safe.
--- isOnGCD (NeverSecret) is the primary GCD filter; duration > 1.5 is the
--- fallback for APIs (GetInventoryItemCooldown) that don't return isOnGCD.
--- modRate drives haste-affected animation speed; nil defaults to 1.
-function CT.UpdateButtonCooldown(button, start, duration, modRate, isOnGCD)
-    local ok, shouldSet = pcall(function()
-        return start and start > 0 and duration and duration > 1.5 and not isOnGCD
-    end)
-    if not ok then
-        -- Values are secret (spell is actively on cooldown). The cooldown frame
-        -- was already set with clean data by the spell-cast handler; do nothing.
-        return
-    end
-    if shouldSet then
-        button.cooldown:SetCooldown(start, duration, modRate)
+-- Duration objects carry restricted cooldown timing without exposing secret
+-- numbers to addon code. The cooldown frame consumes the object directly.
+function CT.UpdateButtonCooldownFromSpell(button, spellID)
+    local duration = spellID and C_Spell.GetSpellCooldownDuration(spellID, true)
+    if duration then
+        button.cooldown:SetCooldownFromDurationObject(duration, true)
     else
         button.cooldown:Clear()
     end
 
     local sec = button._sectionName
     if sec then
-        local desaturate = shouldSet and addon.db.combatTracker.frames[sec].desaturateOnCD
+        local desaturate = false
+        if addon.db.combatTracker.frames[sec].desaturateOnCD and spellID then
+            local info = C_Spell.GetSpellCooldown(spellID)
+            desaturate = info and info.isActive and not info.isOnGCD
+        end
         button.icon:SetDesaturated(desaturate == true)
     end
 end

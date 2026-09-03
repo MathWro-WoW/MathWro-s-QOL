@@ -158,7 +158,7 @@ Key CT methods available to sections:
 | `CT:LayoutSection(section)` | Stable-anchor grid/horizontal/vertical layout engine |
 | `CT:CreateSectionFrame(section)` | Creates anchor frame, registers with LibEditMode, hooks EditModeNudge overlay |
 | `CT:ApplyMasque(section)` | Lazy Masque group creation + button registration |
-| `CT:UpdateButtonCooldown(btn, start, dur)` | pcall-safe cooldown setter; calls `Clear()` if `duration < 1.5s` |
+| `CT:UpdateButtonCooldownFromSpell(btn, spellID)` | Applies a restricted-safe `LuaDurationObject` directly to the cooldown frame |
 
 `CombatTracker` exposes itself globally so section files can reference the parent:
 ```lua
@@ -352,25 +352,26 @@ end)
 
 ### Cooldown Frames Are Self-Managing
 
-`CooldownFrameTemplate` animates the swipe and countdown text internally. Rules:
+`CooldownFrameTemplate` animates the swipe and countdown text internally. Combat
+cooldown timing may be secret in 12.1, including item and inventory APIs.
 
-1. **Only call `SetCooldown()` when state actually changes.** Cache `(start, duration)` per button; skip if unchanged — calling it unconditionally resets the swipe animation mid-cycle causing visible jitter.
-2. **Call `Clear()` when the cooldown ends**, not `SetCooldown(0, 0)`.
-3. **`SecretWhenSpellCooldownRestricted`**: `C_Spell.GetSpellCooldown()` returns restricted sentinel values during combat. Comparing them (e.g. `start > 0`) raises a Lua error. Strategies by context:
-   - **Items/inventory**: Use `C_Item.GetItemCooldown()` or `GetInventoryItemCooldown()` — unrestricted.
-   - **Spells (setting on cast)**: In `UNIT_SPELLCAST_SUCCEEDED`, use `GetTime()` for start and `GetSpellBaseCooldown(spellID)` for base duration in ms. Do **not** use `C_Spell.GetSpellInfo(spellID).cooldownMS` — that field does not exist (see pitfalls below).
-   - **Spells (clearing on expiry)**: `SPELL_UPDATE_COOLDOWN` fires when cooldown ends; `start` is `0` (a plain zero, not secret) so the clear path works.
-   - **Fallback guard**: Wrap reads in `pcall`; if it errors, the spell is actively on cooldown and was already set by the cast handler.
+1. Query `C_Spell.GetSpellCooldownDuration(spellID, true)` to obtain an
+   engine-owned `LuaDurationObject` with the global cooldown excluded.
+2. Pass that object directly to
+   `cooldown:SetCooldownFromDurationObject(duration, true)`. Addon code must not
+   unpack, compare, or reconstruct its restricted timing.
+3. The second argument clears the frame when the engine returns a zero duration.
+   If the API returns `nil`, call `Clear()`.
+4. `LuaDurationObject:IsZero()` may return a secret boolean in combat; never
+   evaluate it with Lua `not`, `and`, `or`, or `if`. For styling, only inspect
+   the `NeverSecret` `SpellCooldownInfo.isActive` and `isOnGCD` fields.
 
 ```lua
-local function UpdateCooldown(button, start, duration)
-    if button._cdStart == start and button._cdDuration == duration then return end
-    button._cdStart, button._cdDuration = start, duration
-    if duration > 1.5 then
-        CooldownFrame_Set(button.cooldown, start, duration, true)
-    else
-        button.cooldown:Clear()
-    end
+local duration = C_Spell.GetSpellCooldownDuration(spellID, true)
+if duration then
+    button.cooldown:SetCooldownFromDurationObject(duration, true)
+else
+    button.cooldown:Clear()
 end
 ```
 
