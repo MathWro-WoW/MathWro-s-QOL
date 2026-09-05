@@ -21,6 +21,7 @@ There is no build step or linter. Run the Lua 5.1 smoke and syntax checks:
 
 ```bash
 lua tests/CombatTracker_Cooldowns_smoke.lua
+lua tests/CombatTracker_TrinketExclusions_smoke.lua
 lua tests/CombatLog_smoke.lua
 lua tests/BuffHealthColor_smoke.lua
 lua tests/EditModeNudge_smoke.lua
@@ -43,7 +44,7 @@ Then validate in-game:
 | `VehicleBar.lua` | Test selected bars with ElvUI and EllesmereUI Action Bars independently when available |
 | `BuffHealthColor.lua` | With ElvUI, test configured spell IDs on player, target, party, and raid frames; verify restricted aura updates produce no Lua errors |
 | `EditModeNudge.lua` | Test native Edit Mode/LibEditMode and EllesmereUI Unlock Mode independently |
-| `CombatTracker.lua` | Enable in `/mqol`; enter combat; trigger a racial, Healthstone or potion, and on-use trinket; verify each cooldown starts immediately without restricted-value errors |
+| `CombatTracker.lua` | Enable in `/mqol`; enter combat; trigger a racial, Healthstone or potion, and on-use trinket; verify each cooldown starts immediately without restricted-value errors. Add a trinket ID to the exclusions field and verify its icon is hidden, then remove it and verify the icon returns |
 | `Config.lua` | Run `/mqol`; verify provider-specific submenus, disabled dependency states, controls, and first-open layout |
 | `CVarSettings.lua` | Run `/mqol`; confirm Spell Queue Window leaves the current CVar unchanged until explicitly enabled, first activation captures that value without writing it, and only that captured or subsequently user-selected value is restored after `/reload` |
 

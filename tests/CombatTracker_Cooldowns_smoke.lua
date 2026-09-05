@@ -17,12 +17,14 @@ C_Spell = {
 
 C_Item = {
     GetItemCooldown = function()
-        error("restricted scalar item cooldowns must not drive tracker frames")
+        error("bag item cooldowns must not drive equipped trinket frames")
     end,
 }
 
-function GetInventoryItemCooldown()
-    error("restricted scalar inventory cooldowns must not drive tracker frames")
+function GetInventoryItemCooldown(unit, slotID)
+    assert(unit == "player", "trinket cooldowns must query equipped inventory slots")
+    assert(slotID == 13, "only the shown on-use trinket should query cooldown state")
+    return 10, 90, 1, 1
 end
 
 local addon = {
@@ -60,11 +62,13 @@ local function newButton(sectionName, spellID, fields)
         Clear = function()
             button.cleared = true
         end,
-        SetCooldown = function()
-            error("restricted scalar cooldowns must not drive tracker frames")
+        SetCooldown = function(_, start, duration, modRate)
+            button.appliedStart = start
+            button.appliedDuration = duration
+            button.appliedModRate = modRate
         end,
         SetCooldownFromDurationObject = function(_, duration, clearIfZero)
-            button.appliedDuration = duration
+            button.appliedDurationObject = duration
             button.clearIfZero = clearIfZero
         end,
     }
@@ -87,7 +91,7 @@ end
 local racialDuration = restrictedDuration()
 local healthstoneDuration = restrictedDuration()
 local potionDuration = restrictedDuration()
-local trinketDuration = restrictedDuration()
+local trinketSpellDuration = restrictedDuration()
 local function setCooldownState(spellID, duration, isActive, isOnGCD)
     durationBySpell[spellID] = duration
     cooldownInfoBySpell[spellID] = {
@@ -99,7 +103,7 @@ end
 setCooldownState(1001, racialDuration, true, false)
 setCooldownState(6262, healthstoneDuration, true, false)
 setCooldownState(1002, potionDuration, true, false)
-setCooldownState(1003, trinketDuration, true, false)
+setCooldownState(1003, trinketSpellDuration, true, false)
 
 local racialButton = newButton("racials", 1001)
 addon.combatTracker.sections.racials.buttons = { racialButton }
@@ -107,7 +111,7 @@ local racialOK, racialError = pcall(function()
     addon.combatTracker.sections.racials:UpdateCooldowns()
 end)
 assert(racialOK, "racial refresh evaluated secret duration state: " .. tostring(racialError))
-assert(racialButton.appliedDuration == racialDuration,
+assert(racialButton.appliedDurationObject == racialDuration,
     "racials must apply the engine-owned cooldown duration object")
 
 local healthstoneButton = newButton("consumables", 6262, {
@@ -124,9 +128,9 @@ local consumablesOK, consumablesError = pcall(function()
 end)
 assert(consumablesOK,
     "consumable refresh evaluated secret duration state: " .. tostring(consumablesError))
-assert(healthstoneButton.appliedDuration == healthstoneDuration,
+assert(healthstoneButton.appliedDurationObject == healthstoneDuration,
     "Healthstone must apply the engine-owned cooldown duration object")
-assert(potionButton.appliedDuration == potionDuration,
+assert(potionButton.appliedDurationObject == potionDuration,
     "potions must apply the engine-owned cooldown duration object")
 
 local trinketButton = newButton("trinkets", 1003, {
@@ -142,13 +146,16 @@ local trinketOK, trinketError = pcall(function()
     addon.combatTracker.sections.trinkets:UpdateCooldowns()
 end)
 assert(trinketOK, "trinket refresh evaluated secret duration state: " .. tostring(trinketError))
-assert(trinketButton.appliedDuration == trinketDuration,
-    "on-use trinkets must apply the engine-owned cooldown duration object")
+assert(not trinketButton.appliedDurationObject,
+    "on-use trinkets must not use the item spell's shorter cooldown duration object")
+assert(trinketButton.appliedStart == 10 and trinketButton.appliedDuration == 90
+    and trinketButton.appliedModRate == 1,
+    "on-use trinkets must apply the equipped inventory item's real cooldown")
 assert(passiveTrinketButton.cleared and not passiveTrinketButton.appliedDuration,
     "passive trinkets must clear stale cooldown state")
 
 assert(racialButton.clearIfZero and healthstoneButton.clearIfZero
-    and potionButton.clearIfZero and trinketButton.clearIfZero,
+    and potionButton.clearIfZero,
     "duration-object cooldowns must clear themselves when the engine reports zero")
 assert(racialButton.desaturated and healthstoneButton.desaturated
     and potionButton.desaturated and trinketButton.desaturated,
@@ -158,14 +165,14 @@ local gcdDuration = restrictedDuration()
 setCooldownState(2001, gcdDuration, true, true)
 local gcdButton = newButton("racials", 2001)
 addon.combatTracker.UpdateButtonCooldownFromSpell(gcdButton, 2001)
-assert(gcdButton.appliedDuration == gcdDuration and not gcdButton.desaturated,
+assert(gcdButton.appliedDurationObject == gcdDuration and not gcdButton.desaturated,
     "global-cooldown state must not desaturate a tracked icon")
 
 local inactiveDuration = restrictedDuration()
 setCooldownState(2002, inactiveDuration, false, false)
 local inactiveButton = newButton("racials", 2002)
 addon.combatTracker.UpdateButtonCooldownFromSpell(inactiveButton, 2002)
-assert(inactiveButton.appliedDuration == inactiveDuration and not inactiveButton.desaturated,
+assert(inactiveButton.appliedDurationObject == inactiveDuration and not inactiveButton.desaturated,
     "inactive cooldown state must keep the icon saturated")
 
 local missingDurationButton = newButton("racials", 2003)
@@ -179,7 +186,7 @@ addon.db.combatTracker.frames.racials.desaturateOnCD = false
 local disabledDesaturationButton = newButton("racials", 2004)
 addon.combatTracker.UpdateButtonCooldownFromSpell(disabledDesaturationButton, 2004)
 addon.db.combatTracker.frames.racials.desaturateOnCD = true
-assert(disabledDesaturationButton.appliedDuration == disabledDesaturationDuration
+assert(disabledDesaturationButton.appliedDurationObject == disabledDesaturationDuration
     and not disabledDesaturationButton.desaturated,
     "disabled desaturation must not affect cooldown rendering")
 

@@ -187,6 +187,7 @@ local defaults = {
                 mergeInto = nil,
                 enabled = true,
                 onUseOnly = true,
+                excludedItems = {},
                 desaturateOnCD = false,
                 stackCountEnabled  = true,
                 stackCountFontSize = 12,

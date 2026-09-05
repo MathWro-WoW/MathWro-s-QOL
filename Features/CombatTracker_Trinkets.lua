@@ -52,9 +52,10 @@ function trinkets:RebuildIcons()
     end
 
     local active = {}  -- { slotID, isOnUse, spellID, icon }
+    local excludedItems = frameDb.excludedItems or {}
     for _, slotID in ipairs(TRINKET_SLOTS) do
         local itemID = GetInventoryItemID("player", slotID)
-        if itemID then
+        if itemID and not excludedItems[itemID] then
             local spellName, spellID = getItemSpell(itemID)
             local isOnUse            = spellName ~= nil
             local icon               = GetInventoryItemTexture("player", slotID)
@@ -124,13 +125,24 @@ function trinkets:RebuildIcons()
     CT:LayoutSection(CT:GetHostKey("trinkets"))
 end
 
--- Refreshes on-use cooldowns through engine-owned duration objects. Passive
--- trinkets have no spell ID and are cleared by the shared updater.
+-- Refreshes on-use trinket cooldowns from the equipped inventory slot. The item
+-- spell can report a shorter internal cooldown than the trinket item itself.
 function trinkets:UpdateCooldowns()
     for _, btn in ipairs(self.buttons) do
         if btn:IsShown() and btn._slotID then
-            local spellID = btn._isOnUse and btn._spellID or nil
-            CT.UpdateButtonCooldownFromSpell(btn, spellID)
+            if btn._isOnUse then
+                local start, duration, _, modRate = GetInventoryItemCooldown("player", btn._slotID)
+                btn.cooldown:SetCooldown(start, duration, modRate)
+
+                local desaturate = false
+                if addon.db.combatTracker.frames.trinkets.desaturateOnCD and btn._spellID then
+                    local info = C_Spell.GetSpellCooldown(btn._spellID)
+                    desaturate = info and info.isActive and not info.isOnGCD
+                end
+                btn.icon:SetDesaturated(desaturate == true)
+            else
+                CT.UpdateButtonCooldownFromSpell(btn, nil)
+            end
         end
     end
 end

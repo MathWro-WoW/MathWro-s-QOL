@@ -582,7 +582,7 @@ local function BuildParentPanel()
 
     local ver = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     ver:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    ver:SetText("v1.8.0 by MathWro  |  Select a category on the left.")
+    ver:SetText("v1.12.0 by MathWro  |  Select a category on the left.")
 
     return panel
 end
@@ -2598,16 +2598,53 @@ local function BuildCombatTrackerPanel()
     trinketsSection:SetPoint("TOPLEFT", racialsSection, "BOTTOMLEFT", 0, -12)
 
     BuildSectionBlock(trinketsSection, "trinkets", "TRINKETS", function(parent, anchor)
+        local frameDb = addon.db.combatTracker.frames.trinkets
         local onUseCB = MakeCheckbox(parent, "On-use only (hide passive trinkets)", 0, 0,
-            function() return addon.db.combatTracker.frames.trinkets.onUseOnly end,
+            function() return frameDb.onUseOnly end,
             function(val)
-                addon.db.combatTracker.frames.trinkets.onUseOnly = val
+                frameDb.onUseOnly = val
                 addon:NotifyFeature("combatTracker")
             end
         )
         onUseCB:ClearAllPoints()
         onUseCB:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -4, -10)
-        return onUseCB
+
+        local excludedLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        excludedLabel:SetPoint("TOPLEFT", onUseCB, "BOTTOMLEFT", 4, -10)
+        excludedLabel:SetText("Exclude trinket item IDs (comma-separated):")
+
+        local excludedInput = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+        excludedInput:SetSize(250, 20)
+        excludedInput:SetAutoFocus(false)
+        excludedInput:SetMaxLetters(100)
+        excludedInput:SetPoint("TOPLEFT", excludedLabel, "BOTTOMLEFT", 0, -6)
+
+        local function formatExcludedItems()
+            local ids = {}
+            for itemID in pairs(frameDb.excludedItems or {}) do
+                table.insert(ids, itemID)
+            end
+            table.sort(ids)
+            for i, itemID in ipairs(ids) do ids[i] = tostring(itemID) end
+            return table.concat(ids, ", ")
+        end
+
+        local function saveExcludedItems()
+            local excludedItems = {}
+            for id in excludedInput:GetText():gmatch("%d+") do
+                local itemID = tonumber(id)
+                if itemID and itemID > 0 then excludedItems[itemID] = true end
+            end
+            frameDb.excludedItems = excludedItems
+            excludedInput:SetText(formatExcludedItems())
+            addon:NotifyFeature("combatTracker")
+        end
+        excludedInput:SetScript("OnEnterPressed", function(self)
+            self:ClearFocus()
+        end)
+        excludedInput:SetScript("OnEditFocusLost", saveExcludedItems)
+        table.insert(refreshFns, function() excludedInput:SetText(formatExcludedItems()) end)
+        return excludedInput
     end)
 
     local consumablesSection = MakeCollapsibleSection(trackerBody, "Consumables", false)

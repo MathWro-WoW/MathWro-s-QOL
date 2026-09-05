@@ -129,7 +129,7 @@ Four surfaces to wire:
 | Spell Queue Window | `CVarSettings.lua` | `spellQueueWindow` | Never writes a value until explicitly enabled; first activation captures the current queue window, and later logins restore that captured or subsequently user-selected value |
 | Edit Mode Nudge | `EditModeNudge.lua` | `editModeNudge` | Provider-split arrow buttons + coordinate display: `enabled` covers native Edit Mode/LibEditMode; `ellesmereEnabled` covers EllesmereUI Unlock Mode and is disabled by default |
 | Buff Health Color | `BuffHealthColor.lua` | `buffHealthColor` | ElvUI health bar recoloring through 12.1 secure Aura Slots for configured player-cast buffs such as Atonement, Lifebloom, Prayer of Mending, Riptide, Beacon of the Savior, Renewing Mist, and custom spell IDs. Aura presence and slot visibility stay engine-managed; each profile retains frame, color, and specialization filters. EllesmereUI Raid Frames already provides equivalent Health Bar Color indicators in its Buff Manager, so MathWroQOL does not duplicate that runtime |
-| Combat Tracker | `CombatTracker.lua` + 3 section files | `combatTracker` | Cooldown icon display system (racials, trinkets, consumables) |
+| Combat Tracker | `CombatTracker.lua` + 3 section files | `combatTracker` | Cooldown icon display system (racials, trinkets, consumables); trinkets honor the configured `frames.trinkets.excludedItems` set |
 
 ---
 
@@ -159,6 +159,8 @@ Key CT methods available to sections:
 | `CT:CreateSectionFrame(section)` | Creates anchor frame, registers with LibEditMode, hooks EditModeNudge overlay |
 | `CT:ApplyMasque(section)` | Lazy Masque group creation + button registration |
 | `CT:UpdateButtonCooldownFromSpell(btn, spellID)` | Applies a restricted-safe `LuaDurationObject` directly to the cooldown frame |
+
+Trinkets are the exception: they use `GetInventoryItemCooldown("player", slotID)` and pass the returned start/duration/modRate directly to `CooldownFrame:SetCooldown`; item spell cooldowns can be shorter than the equipped item cooldown.
 
 `CombatTracker` exposes itself globally so section files can reference the parent:
 ```lua
@@ -355,14 +357,20 @@ end)
 `CooldownFrameTemplate` animates the swipe and countdown text internally. Combat
 cooldown timing may be secret in 12.1, including item and inventory APIs.
 
-1. Query `C_Spell.GetSpellCooldownDuration(spellID, true)` to obtain an
-   engine-owned `LuaDurationObject` with the global cooldown excluded.
+1. Spell-backed sections query `C_Spell.GetSpellCooldownDuration(spellID, true)`
+   to obtain an engine-owned `LuaDurationObject` with the global cooldown
+   excluded.
 2. Pass that object directly to
    `cooldown:SetCooldownFromDurationObject(duration, true)`. Addon code must not
    unpack, compare, or reconstruct its restricted timing.
-3. The second argument clears the frame when the engine returns a zero duration.
-   If the API returns `nil`, call `Clear()`.
-4. `LuaDurationObject:IsZero()` may return a secret boolean in combat; never
+3. Trinkets are item-backed: query `GetInventoryItemCooldown("player", slotID)`
+   and pass start/duration/modRate directly to `cooldown:SetCooldown(...)`.
+   Do not drive trinkets from the item spell cooldown; some on-use trinkets
+   expose a shorter internal spell cooldown than the real equipped item cooldown.
+4. `SetCooldownFromDurationObject(..., true)` clears the frame when the engine
+   returns a zero duration. If the duration-object API returns `nil`, call
+   `Clear()`.
+5. `LuaDurationObject:IsZero()` may return a secret boolean in combat; never
    evaluate it with Lua `not`, `and`, `or`, or `if`. For styling, only inspect
    the `NeverSecret` `SpellCooldownInfo.isActive` and `isOnGCD` fields.
 
