@@ -31,11 +31,39 @@ C_Item = {
     end,
 }
 
+local timers = {}
 C_Timer = {
     After = function(_, callback)
-        callback()
+        table.insert(timers, callback)
     end,
 }
+
+local function flushTimers()
+    local pending = timers
+    timers = {}
+    for _, callback in ipairs(pending) do
+        callback()
+    end
+end
+
+local lastEventFrame
+function CreateFrame()
+    local frame = {
+        events = {},
+    }
+
+    function frame:RegisterEvent(event)
+        self.events[event] = true
+    end
+
+    function frame:SetScript(script, handler)
+        assert(script == "OnEvent")
+        self.handler = handler
+    end
+
+    lastEventFrame = frame
+    return frame
+end
 
 local CT = {
     frames = {},
@@ -106,5 +134,38 @@ addon.db.combatTracker.frames.trinkets.excludedItems[248583] = nil
 section:RebuildIcons()
 assert(#section.buttons == 2,
     "removing a user-configured exclusion must restore the trinket icon")
+
+flushTimers()
+section:Initialize()
+assert(lastEventFrame and lastEventFrame.events.PLAYER_EQUIPMENT_CHANGED,
+    "trinkets must listen for equipped item changes")
+
+section.buttons = {}
+equipped[13] = nil
+equipped[14] = nil
+addon.db.combatTracker.frames.trinkets.excludedItems = {}
+
+lastEventFrame.handler(lastEventFrame, "PLAYER_EQUIPMENT_CHANGED", 13, true)
+equipped[13] = 222222
+flushTimers()
+
+assert(#section.buttons == 1 and section.buttons[1]._slotID == 13,
+    "equipping an on-use trinket must refresh tracker icons without a reload")
+
+section.buttons = {}
+equipped[13] = 333333
+equipped[14] = nil
+section:RebuildIcons()
+flushTimers()
+assert(section.buttons[1] and section.buttons[1]:IsShown() and section.buttons[1]._slotID == 13,
+    "setup must start with a visible equipped trinket")
+
+equipped[13] = nil
+lastEventFrame.handler(lastEventFrame, "PLAYER_ENTERING_WORLD")
+equipped[13] = 333333
+flushTimers()
+
+assert(section.buttons[1] and section.buttons[1]:IsShown() and section.buttons[1]._slotID == 13,
+    "loading screens must not drop equipped trinket icons until reload")
 
 print("CombatTracker trinket exclusion smoke test: PASS")

@@ -135,9 +135,8 @@ function trinkets:UpdateCooldowns()
                 btn.cooldown:SetCooldown(start, duration, modRate)
 
                 local desaturate = false
-                if addon.db.combatTracker.frames.trinkets.desaturateOnCD and btn._spellID then
-                    local info = C_Spell.GetSpellCooldown(btn._spellID)
-                    desaturate = info and info.isActive and not info.isOnGCD
+                if addon.db.combatTracker.frames.trinkets.desaturateOnCD then
+                    desaturate = start and start > 0 and duration and duration > 0
                 end
                 btn.icon:SetDesaturated(desaturate == true)
             else
@@ -171,16 +170,16 @@ function trinkets:Initialize()
                 end
             end
         elseif event == "PLAYER_ENTERING_WORLD" then
-            -- At PLAYER_LOGIN inventory/item data may not be ready. This scan
-            -- requests missing item data; ITEM_DATA_LOAD_RESULT drives the retry.
+            -- After loading screens, equipped slot data may settle after the event.
+            -- The deferred scan still requests missing item data when an item ID is present.
             if not db.enabled or not frameDb.enabled then return end
-            self:RebuildIcons()
+            C_Timer.After(0, function() self:RebuildIcons() end)
         elseif event == "PLAYER_EQUIPMENT_CHANGED" then
             if not db.enabled or not frameDb.enabled then return end
-            -- Only react to trinket slot changes
+            -- Inventory slot contents may settle after the equipment event fires.
             local slotID = arg1
             if slotID == 13 or slotID == 14 then
-                self:RebuildIcons()
+                C_Timer.After(0, function() self:RebuildIcons() end)
             end
         elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" then
             if not db.enabled or not frameDb.enabled then return end

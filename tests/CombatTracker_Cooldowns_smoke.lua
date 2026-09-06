@@ -161,6 +161,11 @@ assert(racialButton.desaturated and healthstoneButton.desaturated
     and potionButton.desaturated and trinketButton.desaturated,
     "active duration objects must preserve configured icon desaturation")
 
+setCooldownState(1003, trinketSpellDuration, false, false)
+addon.combatTracker.sections.trinkets:UpdateCooldowns()
+assert(trinketButton.desaturated,
+    "equipped trinket cooldowns must desaturate even when the item spell reports inactive")
+
 local gcdDuration = restrictedDuration()
 setCooldownState(2001, gcdDuration, true, true)
 local gcdButton = newButton("racials", 2001)
